@@ -31,6 +31,14 @@ INGREDIENT_SCHEMA = vol.Schema(
     extra=vol.REMOVE_EXTRA,
 )
 
+STEP_SCHEMA = vol.Schema(
+    {
+        vol.Optional("tekst", default=""): vol.Any(None, cv.string),
+        vol.Optional("billeder", default=[]): [cv.string],
+    },
+    extra=vol.REMOVE_EXTRA,
+)
+
 RECIPE_SCHEMA = vol.Schema(
     {
         vol.Optional("id"): cv.string,
@@ -46,7 +54,7 @@ RECIPE_SCHEMA = vol.Schema(
             vol.Coerce(int), vol.Range(min=10, max=300)
         ),
         vol.Optional("ingredienser", default=[]): [INGREDIENT_SCHEMA],
-        vol.Optional("fremgang", default=[]): [cv.string],
+        vol.Optional("fremgang", default=[]): [vol.Any(STEP_SCHEMA, cv.string)],
     },
     extra=vol.REMOVE_EXTRA,
 )
