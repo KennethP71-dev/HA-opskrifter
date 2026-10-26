@@ -3,14 +3,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 
 from . import api
-from .const import DATA_REGISTERED, DOMAIN, URL_BASE, VERSION
+from .const import DATA_REGISTERED, DOMAIN, URL_BASE
+from .frontend_reg import async_register_card
 from .images import ImageServeView, ImageUploadView
 from .store import OpskriftStore
 
@@ -29,7 +29,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.http.async_register_static_paths(
             [StaticPathConfig(URL_BASE, str(Path(__file__).parent / "frontend"), False)]
         )
-        add_extra_js_url(hass, f"{URL_BASE}/opskrift-card.js?v={VERSION}")
+        await async_register_card(hass)
         hass.data[DATA_REGISTERED] = True
     return True
 
