@@ -2,7 +2,7 @@
  * Opskrift-card – frontend til integrationen Opskrifter
  * Indlæses automatisk af integrationen. Kort-type: custom:opskrift-card
  */
-const OC_VERSION = "1.1.0";
+const OC_VERSION = "1.1.1";
 
 const COLORS = {
   red: ["Rød", "244, 67, 54"], pink: ["Pink", "233, 30, 99"], purple: ["Lilla", "156, 39, 176"],
@@ -253,6 +253,7 @@ class OpskriftCard extends HTMLElement {
     this._formError = null;
     this._notice = null;
     this._lightbox = null;
+    this._retry = null;
     const root = this.shadowRoot;
     root.addEventListener("click", (e) => this._onClick(e));
     root.addEventListener("input", (e) => this._onInput(e));
@@ -283,14 +284,16 @@ class OpskriftCard extends HTMLElement {
 
   set hass(h) {
     this._hass = h;
-    if (!this._unsub && !this._subscribing && this.isConnected) this._subscribe();
+    if (!this._unsub && !this._subscribing && !this._retry && this.isConnected) this._subscribe();
   }
 
   connectedCallback() {
-    if (this._hass && !this._unsub && !this._subscribing) this._subscribe();
+    if (this._hass && !this._unsub && !this._subscribing && !this._retry) this._subscribe();
   }
 
   disconnectedCallback() {
+    clearTimeout(this._retry);
+    this._retry = null;
     if (this._unsub) {
       try { this._unsub(); } catch (e) { /* ignore */ }
       this._unsub = null;
@@ -312,10 +315,14 @@ class OpskriftCard extends HTMLElement {
       if (!this.isConnected) this.disconnectedCallback();
     } catch (err) {
       this._status = "error";
-      this._error = err?.code === "unknown_command"
-        ? "Integrationen Opskrifter er ikke sat op. Tilføj den under Indstillinger → Enheder og tjenester."
-        : `Kunne ikke hente opskrifter: ${err?.message || err?.code || err}`;
+      this._error = err?.code === "unknown_command" || err?.code === "not_loaded"
+        ? "Venter på at integrationen Opskrifter starter… Er den ikke sat op, så tilføj den under Indstillinger → Enheder og tjenester."
+        : `Kunne ikke hente opskrifter: ${err?.message || err?.code || err}. Prøver igen…`;
       this._render();
+      this._retry = setTimeout(() => {
+        this._retry = null;
+        if (this.isConnected && !this._unsub) this._subscribe();
+      }, 5000);
     }
     this._subscribing = false;
   }
