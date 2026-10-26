@@ -2,7 +2,7 @@
  * Opskrift-card – frontend til integrationen Opskrifter
  * Indlæses automatisk af integrationen. Kort-type: custom:opskrift-card
  */
-const OC_VERSION = "1.0.0";
+const OC_VERSION = "1.1.0";
 
 const COLORS = {
   red: ["Rød", "244, 67, 54"], pink: ["Pink", "233, 30, 99"], purple: ["Lilla", "156, 39, 176"],
@@ -12,6 +12,7 @@ const COLORS = {
   brown: ["Brun", "121, 85, 72"], grey: ["Grå", "158, 158, 158"],
 };
 const UNITS = ["g", "kg", "ml", "dl", "l", "tsk.", "spsk.", "fed", "nip", "stk.", "dåse", "bdt.", "skiver"];
+const IMAGE_ID = /^[0-9a-f]{32}$/;
 
 const rgb = (f) => {
   const name = COLORS[f] ? f : "orange";
@@ -27,6 +28,8 @@ const cap = (s) => String(s || "").charAt(0).toUpperCase() + String(s || "").sli
 const normUnit = (u) => String(u || "").toLowerCase().replace(/\./g, "").trim();
 const txt = (v) => (v == null ? "" : String(v)).trim();
 const dkNum = (v) => (v == null || v === "" ? "" : String(v).replace(".", ","));
+const imgUrl = (ref, thumb = false) =>
+  IMAGE_ID.test(ref || "") ? `/api/opskrifter/billede/${ref}${thumb ? "?thumb=1" : ""}` : ref;
 
 const WHOLE_UNITS = ["fed", "nip", "dåse", "dåser", "bdt", "pk", "pakke", "skive", "skiver", "blade"];
 const SPOON_UNITS = ["dl", "cl", "spsk", "tsk", "kop", "knsp"];
@@ -75,7 +78,8 @@ function normalize(list) {
       ...r,
       id: r.id || slug(r.navn),
       ingredienser: (r.ingredienser || []).map((i) => (typeof i === "string" ? { navn: i } : i)),
-      fremgang: r.fremgang || [],
+      fremgang: (r.fremgang || []).map((s) =>
+        typeof s === "string" ? { tekst: s, billeder: [] } : { tekst: s?.tekst || "", billeder: s?.billeder || [] }),
       krydderistyrke: r.krydderistyrke ?? 100,
     }))
     .sort((a, b) => a.navn.localeCompare(b.navn, "da"));
@@ -89,25 +93,24 @@ ha-card{padding:12px;overflow:hidden}
 .primary{font-weight:700;font-size:14px;line-height:20px;color:var(--primary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .primary.big{font-size:16px;line-height:22px;white-space:normal}
 .secondary{font-weight:500;font-size:12px;line-height:16px;color:var(--secondary-text-color)}
-.shape{flex:none;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(var(--oc-rgb),.2);color:rgb(var(--oc-rgb));--mdc-icon-size:22px}
+.shape{flex:none;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(var(--oc-rgb),.2);color:rgb(var(--oc-rgb));--mdc-icon-size:22px;background-size:cover;background-position:center}
 .icon-btn{flex:none;width:36px;height:36px;border-radius:50%;border:none;padding:0;background:transparent;color:var(--primary-text-color);cursor:pointer;display:flex;align-items:center;justify-content:center;--mdc-icon-size:20px}
 .icon-btn:hover{background:rgba(var(--rgb-primary-text-color,0,0,0),.06)}
 .icon-btn:disabled{opacity:.3;cursor:default}
-.icon-btn.sm{width:32px;height:32px;--mdc-icon-size:18px}
 .search{width:100%;box-sizing:border-box;height:40px;border-radius:12px;border:none;padding:0 14px;margin:4px 0 8px;font:inherit;font-size:14px;background:rgba(var(--rgb-primary-text-color,0,0,0),.05);color:var(--primary-text-color);outline:none}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
 .chip{height:32px;padding:0 12px;border-radius:16px;border:none;font:inherit;font-size:12px;font-weight:600;cursor:pointer;background:rgba(var(--rgb-primary-text-color,0,0,0),.05);color:var(--primary-text-color)}
-.chip.sm{height:28px;padding:0 10px}
 .chip.on{background:rgba(var(--oc-rgb),.22);color:rgb(var(--oc-rgb))}
 .list{display:flex;flex-direction:column;gap:2px}
 .row{display:flex;align-items:center;gap:12px;padding:8px;border-radius:12px;cursor:pointer}
 .row:hover{background:rgba(var(--rgb-primary-text-color,0,0,0),.04)}
-.row .shape{width:38px;height:38px;--mdc-icon-size:20px}
+.row .shape{width:44px;height:44px;--mdc-icon-size:20px}
 .chev{color:var(--secondary-text-color);--mdc-icon-size:20px}
 .empty,.error,.notice{padding:12px 8px;font-size:13px;line-height:1.5;color:var(--secondary-text-color)}
 .error{color:var(--error-color,#db4437)}
 .notice{background:rgba(var(--oc-rgb),.08);border-radius:12px;padding:10px 12px;margin:0 0 8px;color:var(--primary-text-color)}
-.photo{width:100%;max-height:220px;object-fit:cover;border-radius:12px;margin:4px 0 8px;display:block}
+.hero{display:block;width:100%;padding:0;border:none;background:none;cursor:zoom-in;margin:4px 0 10px}
+.hero img{width:100%;max-height:280px;object-fit:cover;border-radius:14px;display:block}
 .panel{background:rgba(var(--oc-rgb),.08);border-radius:16px;padding:12px;margin:4px 0 14px}
 .label{font-size:12px;font-weight:600;color:var(--secondary-text-color);margin:2px 0 4px}
 .stepper{display:flex;align-items:center;gap:8px;margin:6px 0}
@@ -118,8 +121,7 @@ ha-card{padding:12px;overflow:hidden}
 .scaleinfo{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:500;color:var(--secondary-text-color);min-height:28px}
 .link{border:none;background:none;font:inherit;font-size:12px;font-weight:700;color:rgb(var(--oc-rgb));cursor:pointer;padding:4px 2px}
 .section{margin:0 4px 16px}
-.h{font-size:14px;font-weight:700;color:var(--primary-text-color);margin:12px 0 6px}
-.section .h{margin-top:0}
+.h{font-size:14px;font-weight:700;color:var(--primary-text-color);margin:0 0 6px}
 .ing{display:grid;grid-template-columns:96px 1fr auto;gap:12px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--divider-color)}
 .ing:last-child{border-bottom:none}
 .amt{font-weight:700;font-size:14px;color:var(--primary-text-color);white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -127,36 +129,101 @@ ha-card{padding:12px;overflow:hidden}
 .note{display:block;font-size:12px;color:var(--secondary-text-color)}
 .tag{--mdc-icon-size:16px;color:rgb(var(--oc-rgb))}
 .steps{margin:0;padding-left:22px;font-size:14px;line-height:1.5;color:var(--primary-text-color)}
-.steps li{padding:3px 0 3px 4px}
+.steps li{padding:4px 0 6px 4px}
 .steps li::marker{font-weight:700;color:rgb(var(--oc-rgb))}
+.thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.thumb{width:92px;height:92px;padding:0;border:none;border-radius:10px;overflow:hidden;cursor:zoom-in;background:rgba(var(--rgb-primary-text-color,0,0,0),.06)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .notes{margin:0;font-size:13px;line-height:1.5;color:var(--secondary-text-color);white-space:pre-line}
 .meta{font-size:11px;color:var(--secondary-text-color);margin:0 4px 4px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;border-radius:12px;border:none;font:inherit;font-size:13px;font-weight:700;cursor:pointer;background:rgba(var(--rgb-primary-text-color,0,0,0),.06);color:var(--primary-text-color);--mdc-icon-size:18px}
-.btn.primary-btn{background:rgb(var(--oc-rgb));color:#fff}
-.btn.danger{background:rgba(var(--rgb-red-color,244,67,54),.12);color:var(--error-color,#db4437)}
-.btn:disabled{opacity:.5;cursor:default}
-.form{padding:0 4px 4px}
-.fld{display:flex;flex-direction:column;gap:4px;margin:0 0 10px;min-width:0}
-.fld span{font-size:12px;font-weight:600;color:var(--secondary-text-color)}
-.fld input,.fld select,.fld textarea{box-sizing:border-box;width:100%;min-width:0;border:1px solid var(--divider-color);border-radius:10px;padding:9px 10px;font:inherit;font-size:14px;background:var(--ha-card-background,var(--card-background-color,#fff));color:var(--primary-text-color);outline:none}
+.lightbox{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;cursor:zoom-out}
+.lightbox img{max-width:100%;max-height:100%;border-radius:8px;object-fit:contain}
+.lightbox .icon-btn{position:absolute;top:12px;right:12px;color:#fff;background:rgba(255,255,255,.12)}
+.search:focus-visible,.chip:focus-visible,.row:focus-visible,.step:focus-visible,.icon-btn:focus-visible,.link:focus-visible,.thumb:focus-visible,.hero:focus-visible{outline:2px solid var(--primary-color);outline-offset:2px}
+
+/* ---------- editor: altid lyst tema ---------- */
+ha-card.editing{--ha-card-background:#eef0f3;background:#eef0f3;color:#1c1f24;padding:0}
+.editor{--e-bg:#eef0f3;--e-surface:#fff;--e-sub:#f6f7f9;--e-text:#1c1f24;--e-muted:#5c636e;--e-border:#c9ced6;
+  --e-accent:color-mix(in srgb, rgb(var(--oc-rgb)) 72%, #000);--e-tint:rgba(var(--oc-rgb),.12);
+  color:var(--e-text);font-size:14px;padding:0 0 12px}
+.e-top{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--e-surface);border-bottom:1px solid var(--e-border)}
+.e-top .title{flex:1;font-size:17px;font-weight:700}
+.editor .icon-btn{color:var(--e-text)}
+.editor .icon-btn:hover{background:rgba(0,0,0,.06)}
+.e-card{background:var(--e-surface);border:1px solid var(--e-border);border-radius:14px;margin:12px 12px 0;padding:14px}
+.e-card > .e-h{font-size:15px;font-weight:700;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.e-h .count{font-size:12px;font-weight:600;color:var(--e-muted)}
+.fld{display:flex;flex-direction:column;gap:5px;margin:0 0 12px;min-width:0}
+.fld > span{font-size:12px;font-weight:600;color:var(--e-muted)}
+.fld input,.fld select,.fld textarea{box-sizing:border-box;width:100%;min-width:0;border:1px solid var(--e-border);border-radius:10px;padding:10px 11px;font:inherit;font-size:15px;background:#fff;color:var(--e-text);outline:none}
 .fld textarea{resize:vertical;line-height:1.45}
-.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:rgb(var(--oc-rgb))}
-.cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.cols3{display:grid;grid-template-columns:72px 84px 1fr;gap:8px}
-.ingedit{border-radius:14px;background:rgba(var(--rgb-primary-text-color,0,0,0),.03);padding:10px 10px 6px;margin:0 0 8px}
-.ingedit .fld{margin-bottom:8px}
-.flags{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
-.spacer{flex:1}
-.actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;flex-wrap:wrap}
-.actions .right{display:flex;gap:8px;margin-left:auto}
-.search:focus-visible,.chip:focus-visible,.row:focus-visible,.step:focus-visible,.icon-btn:focus-visible,.link:focus-visible,.btn:focus-visible{outline:2px solid var(--primary-color);outline-offset:2px}
+.fld input::placeholder,.fld textarea::placeholder{color:#9aa1ab}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--e-accent);box-shadow:0 0 0 3px var(--e-tint)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cols3{display:grid;grid-template-columns:84px 96px 1fr;gap:10px}
+.e-hint{font-size:12px;color:var(--e-muted);margin:-4px 0 10px;line-height:1.4}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:0 14px;border-radius:10px;border:1px solid var(--e-border);font:inherit;font-size:14px;font-weight:600;cursor:pointer;background:#fff;color:var(--e-text);--mdc-icon-size:18px;white-space:nowrap}
+.btn:hover{background:var(--e-sub)}
+.btn.primary-btn{background:var(--e-accent);border-color:var(--e-accent);color:#fff}
+.btn.danger{color:#b3261e;border-color:#e8b4b0}
+.btn.quiet{border-color:transparent;background:transparent;color:var(--e-muted)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn:focus-visible,.ing-head:focus-visible,.toggle:focus-visible{outline:2px solid var(--e-accent);outline-offset:2px}
+.mainimg{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.mainimg img{width:140px;height:96px;object-fit:cover;border-radius:10px;border:1px solid var(--e-border)}
+.mainimg .ph{width:140px;height:96px;border-radius:10px;border:1px dashed var(--e-border);display:flex;align-items:center;justify-content:center;color:var(--e-muted);--mdc-icon-size:28px;background:var(--e-sub)}
+.upload{position:relative;overflow:hidden}
+.upload input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.ing-list{border:1px solid var(--e-border);border-radius:12px;overflow:hidden}
+.ing-item + .ing-item{border-top:1px solid var(--e-border)}
+.ing-head{display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;padding:11px 12px;border:none;background:#fff;font:inherit;color:var(--e-text);text-align:left;cursor:pointer}
+.ing-head:hover{background:var(--e-sub)}
+.ing-item.open .ing-head{background:var(--e-tint)}
+.num{flex:none;width:26px;height:26px;border-radius:50%;background:var(--e-sub);border:1px solid var(--e-border);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;color:var(--e-muted)}
+.ing-item.open .num{background:var(--e-accent);border-color:var(--e-accent);color:#fff}
+.t-main{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.t-name{font-size:15px;font-weight:700}
+.t-name.empty{color:#9aa1ab;font-weight:600;font-style:italic}
+.t-amt{font-size:14px;color:var(--e-muted);font-variant-numeric:tabular-nums}
+.badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--e-tint);color:var(--e-accent)}
+.badge.grey{background:#e7e9ed;color:#4a515c}
+.ing-head ha-icon{color:var(--e-muted);--mdc-icon-size:20px;flex:none}
+.ing-body{padding:14px 12px 4px 50px;background:var(--e-sub);border-top:1px solid var(--e-border);box-shadow:inset 3px 0 0 var(--e-accent)}
+.toggles{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.toggle{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px 0 8px;border-radius:999px;border:1px solid var(--e-border);background:#fff;font:inherit;font-size:13px;font-weight:600;color:var(--e-text);cursor:pointer;--mdc-icon-size:18px}
+.toggle ha-icon{color:#9aa1ab}
+.toggle.on{background:var(--e-tint);border-color:var(--e-accent);color:var(--e-accent)}
+.toggle.on ha-icon{color:var(--e-accent)}
+.row-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;padding:0 0 10px}
+.add-row{margin-top:10px}
+.step-item{display:grid;grid-template-columns:26px 1fr;gap:12px;padding:12px 0;border-top:1px solid var(--e-border)}
+.step-item:first-child{border-top:none;padding-top:0}
+.step-item .num{margin-top:8px;background:var(--e-accent);border-color:var(--e-accent);color:#fff}
+.step-item textarea{box-sizing:border-box;width:100%;border:1px solid var(--e-border);border-radius:10px;padding:10px 11px;font:inherit;font-size:15px;line-height:1.45;background:#fff;color:var(--e-text);outline:none;resize:vertical}
+.step-item textarea:focus{border-color:var(--e-accent);box-shadow:0 0 0 3px var(--e-tint)}
+.e-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0}
+.e-thumb{position:relative;width:84px;height:84px}
+.e-thumb img{width:100%;height:100%;object-fit:cover;border-radius:10px;border:1px solid var(--e-border);display:block}
+.e-thumb .x{position:absolute;top:-6px;right:-6px;width:26px;height:26px;border-radius:50%;border:none;background:#1c1f24;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;--mdc-icon-size:16px;padding:0}
+.step-tools{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
+.step-tools .spacer{flex:1}
+.e-error{margin:12px 12px 0;padding:10px 12px;border-radius:10px;background:#fdecea;color:#8c1d18;font-size:14px}
+.e-bottom{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 12px 0}
+.e-bottom .right{display:flex;gap:8px;margin-left:auto}
+.busy{font-size:13px;color:var(--e-muted)}
+@media (max-width:520px){
+  .cols{grid-template-columns:1fr}
+  .cols3{grid-template-columns:76px 88px 1fr}
+  .ing-body{padding-left:12px}
+}
 `;
 
 const PRINT_STYLE = `
 @page{size:A4;margin:18mm 20mm}
 body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#222;font-size:11pt;line-height:1.45}
 h1{font-size:20pt;margin:0 0 2pt}
-.sub{color:#666;margin:0 0 14pt}
+.sub{color:#666;margin:0 0 12pt}
+.hero{width:100%;max-height:70mm;object-fit:cover;border-radius:4mm;margin:0 0 6pt}
 h2{font-size:13pt;margin:16pt 0 6pt}
 table{border-collapse:collapse;width:100%}
 td{padding:4pt 0;border-bottom:0.5pt solid #ddd;vertical-align:top}
@@ -179,15 +246,23 @@ class OpskriftCard extends HTMLElement {
     this._openId = null;
     this._state = {};
     this._draft = null;
+    this._openIng = null;
+    this._uploading = 0;
     this._saving = false;
     this._confirmDelete = false;
     this._formError = null;
     this._notice = null;
+    this._lightbox = null;
     const root = this.shadowRoot;
     root.addEventListener("click", (e) => this._onClick(e));
     root.addEventListener("input", (e) => this._onInput(e));
     root.addEventListener("change", (e) => this._onChange(e));
     root.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && this._lightbox) {
+        this._lightbox = null;
+        this._render();
+        return;
+      }
       if ((e.key === "Enter" || e.key === " ") && e.target.classList?.contains("row")) {
         e.preventDefault();
         this._onClick(e);
@@ -324,12 +399,27 @@ class OpskriftCard extends HTMLElement {
   /* ---------- visning ---------- */
   _render() {
     let body;
-    if (this._draft) body = this._editor();
-    else {
+    let cls = "";
+    if (this._draft) {
+      body = this._editor();
+      cls = "editing";
+    } else {
       const r = this._recipes.find((x) => x.id === this._openId);
       body = r ? this._detail(r) : this._list();
     }
-    this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card style="${rgb(this._config?.farve)}">${body}</ha-card>`;
+    const lightbox = this._lightbox
+      ? `<div class="lightbox" data-action="close-lightbox"><img src="${esc(this._lightbox)}" alt="">
+          <button class="icon-btn" data-action="close-lightbox" aria-label="Luk billede"><ha-icon icon="mdi:close"></ha-icon></button></div>`
+      : "";
+    this.shadowRoot.innerHTML =
+      `<style>${STYLE}</style><ha-card class="${cls}" style="${rgb(this._config?.farve)}">${body}</ha-card>${lightbox}`;
+  }
+
+  _shape(r) {
+    if (r.billede) {
+      return `<div class="shape" style="${rgb(r.farve)}background-image:url('${esc(imgUrl(r.billede, true))}')"></div>`;
+    }
+    return `<div class="shape" style="${rgb(r.farve)}"><ha-icon icon="${esc(r.ikon || "mdi:silverware-fork-knife")}"></ha-icon></div>`;
   }
 
   _list() {
@@ -370,7 +460,7 @@ class OpskriftCard extends HTMLElement {
     if (!list.length) return `<div class="empty">Ingen opskrifter matcher “${esc(this._q)}”.</div>`;
     return list.map((r) => `
       <div class="row" data-action="open" data-id="${esc(r.id)}" tabindex="0" role="button">
-        <div class="shape" style="${rgb(r.farve)}"><ha-icon icon="${esc(r.ikon || "mdi:silverware-fork-knife")}"></ha-icon></div>
+        ${this._shape(r)}
         <div class="info">
           <div class="primary">${esc(r.navn)}</div>
           <div class="secondary">${esc([r.personer ? `${fmtNum(r.personer)} pers.` : null, r.tid, r.kategori].filter(Boolean).join(", "))}</div>
@@ -401,7 +491,7 @@ class OpskriftCard extends HTMLElement {
         ${this._readonly ? "" : `<button class="icon-btn" data-action="edit" aria-label="Redigér opskrift"><ha-icon icon="mdi:pencil-outline"></ha-icon></button>`}
         <button class="icon-btn" data-action="print" aria-label="Print opskrift"><ha-icon icon="mdi:printer-outline"></ha-icon></button>
       </div>
-      ${r.billede ? `<img class="photo" src="${esc(r.billede)}" alt="">` : ""}
+      ${r.billede ? `<button class="hero" data-action="zoom" data-src="${esc(imgUrl(r.billede))}" aria-label="Vis billedet i stor størrelse"><img src="${esc(imgUrl(r.billede))}" alt=""></button>` : ""}
       <div style="${rgb(r.farve)}">
         <div class="panel">
           ${modes.length > 1 ? `<div class="label">Skalér efter</div><div class="chips">${modes.map((x) =>
@@ -432,7 +522,9 @@ class OpskriftCard extends HTMLElement {
               return `<div class="ing"><div class="amt">${amt}</div><div class="name">${esc(i.navn)}${i.note ? `<span class="note">${esc(i.note)}</span>` : ""}</div>${tag}</div>`;
             }).join("")}
           </div>`).join("")}
-        ${r.fremgang.length ? `<div class="section"><div class="h">Fremgangsmåde</div><ol class="steps">${r.fremgang.map((t) => `<li>${esc(t)}</li>`).join("")}</ol></div>` : ""}
+        ${r.fremgang.length ? `<div class="section"><div class="h">Fremgangsmåde</div><ol class="steps">${r.fremgang.map((t) => `
+          <li>${esc(t.tekst)}${t.billeder.length ? `<div class="thumbs">${t.billeder.map((b) =>
+            `<button class="thumb" data-action="zoom" data-src="${esc(imgUrl(b))}" aria-label="Vis billedet i stor størrelse"><img src="${esc(imgUrl(b, true))}" alt="" loading="lazy"></button>`).join("")}</div>` : ""}</li>`).join("")}</ol></div>` : ""}
         ${r.noter ? `<div class="section"><div class="h">Noter</div><p class="notes">${esc(r.noter)}</p></div>` : ""}
         ${updated ? `<div class="meta">Senest rettet ${esc(updated)}${r.opdateret_af ? ` af ${esc(r.opdateret_af)}` : ""}</div>` : ""}
       </div>`;
@@ -444,14 +536,15 @@ class OpskriftCard extends HTMLElement {
       const d = JSON.parse(JSON.stringify(r));
       d.personer = dkNum(d.personer);
       d.ingredienser = d.ingredienser.map((i) => ({ ...i, maengde: dkNum(i.maengde) }));
-      if (!d.ingredienser.length) d.ingredienser.push({ navn: "" });
-      d.fremgangTekst = (d.fremgang || []).join("\n");
+      d.trin = d.fremgang.map((t) => ({ tekst: t.tekst, billeder: [...t.billeder] }));
+      if (!d.trin.length) d.trin.push({ tekst: "", billeder: [] });
       return d;
     }
     return {
       navn: "", kategori: "", tid: "", personer: "4", ikon: "mdi:silverware-fork-knife",
-      farve: "orange", krydderistyrke: 100, billede: "", noter: "", fremgangTekst: "",
-      ingredienser: [{ navn: "" }, { navn: "" }, { navn: "" }],
+      farve: "orange", krydderistyrke: 100, billede: "", noter: "",
+      ingredienser: [{ navn: "" }],
+      trin: [{ tekst: "", billeder: [] }],
     };
   }
 
@@ -467,29 +560,94 @@ class OpskriftCard extends HTMLElement {
       ${o.mode ? `inputmode="${o.mode}"` : ""} autocomplete="off"></label>`;
   }
 
+  _ingHeadInner(i, idx) {
+    const amount = [txt(i.maengde), txt(i.enhed)].filter(Boolean).join(" ");
+    const badges = [
+      i.krydderi ? `<span class="badge">Krydderi</span>` : "",
+      i.noegle ? `<span class="badge">Skaleres efter</span>` : "",
+      i.skaler === false ? `<span class="badge grey">Fast mængde</span>` : "",
+      txt(i.gruppe) && txt(i.gruppe) !== "Ingredienser" ? `<span class="badge grey">${esc(i.gruppe)}</span>` : "",
+    ].join("");
+    return `
+      <span class="num">${idx + 1}</span>
+      <span class="t-main">
+        <span class="t-name ${txt(i.navn) ? "" : "empty"}">${esc(txt(i.navn) || "Ny ingrediens")}</span>
+        <span class="t-amt">${esc(amount)}</span>
+        ${badges}
+      </span>
+      <ha-icon icon="${this._openIng === idx ? "mdi:chevron-up" : "mdi:chevron-down"}"></ha-icon>`;
+  }
+
+  _toggle(idx, k, on, label) {
+    return `<button class="toggle ${on ? "on" : ""}" data-action="flag" data-ing="${idx}" data-k="${k}" aria-pressed="${on}">
+      <ha-icon icon="${on ? "mdi:checkbox-marked" : "mdi:checkbox-blank-outline"}"></ha-icon>${esc(label)}</button>`;
+  }
+
   _ingEditRows() {
     const list = this._draft.ingredienser;
-    return list.map((i, idx) => `
-      <div class="ingedit">
-        <div class="cols3">
-          ${this._ifield("Mængde", idx, "maengde", i.maengde, { mode: "decimal" })}
-          ${this._ifield("Enhed", idx, "enhed", i.enhed, { list: "oc-units" })}
-          ${this._ifield("Ingrediens", idx, "navn", i.navn)}
-        </div>
-        <div class="cols">
-          ${this._ifield("Note", idx, "note", i.note, { placeholder: "Fx i fine tern" })}
-          ${this._ifield("Gruppe", idx, "gruppe", i.gruppe, { placeholder: "Ingredienser", list: "oc-groups" })}
-        </div>
-        <div class="flags">
-          <button class="chip sm ${i.krydderi ? "on" : ""}" data-action="flag" data-ing="${idx}" data-k="krydderi">Krydderi</button>
-          <button class="chip sm ${i.noegle ? "on" : ""}" data-action="flag" data-ing="${idx}" data-k="noegle">Skalér efter denne</button>
-          <button class="chip sm ${i.skaler === false ? "on" : ""}" data-action="flag" data-ing="${idx}" data-k="fast">Fast mængde</button>
-          <span class="spacer"></span>
-          <button class="icon-btn sm" data-action="ing-up" data-ing="${idx}" ${idx === 0 ? "disabled" : ""} aria-label="Flyt op"><ha-icon icon="mdi:arrow-up"></ha-icon></button>
-          <button class="icon-btn sm" data-action="ing-down" data-ing="${idx}" ${idx === list.length - 1 ? "disabled" : ""} aria-label="Flyt ned"><ha-icon icon="mdi:arrow-down"></ha-icon></button>
-          <button class="icon-btn sm" data-action="ing-del" data-ing="${idx}" aria-label="Fjern ingrediens"><ha-icon icon="mdi:trash-can-outline"></ha-icon></button>
+    return list.map((i, idx) => {
+      const open = this._openIng === idx;
+      return `
+      <div class="ing-item ${open ? "open" : ""}">
+        <button class="ing-head" data-action="ing-toggle" data-ing="${idx}" aria-expanded="${open}">${this._ingHeadInner(i, idx)}</button>
+        ${open ? `
+        <div class="ing-body">
+          <div class="cols3">
+            ${this._ifield("Mængde", idx, "maengde", i.maengde, { mode: "decimal", placeholder: "0,5" })}
+            ${this._ifield("Enhed", idx, "enhed", i.enhed, { list: "oc-units", placeholder: "spsk." })}
+            ${this._ifield("Ingrediens", idx, "navn", i.navn, { placeholder: "Fx olie" })}
+          </div>
+          <div class="cols">
+            ${this._ifield("Note", idx, "note", i.note, { placeholder: "Fx i fine tern" })}
+            ${this._ifield("Gruppe", idx, "gruppe", i.gruppe, { placeholder: "Ingredienser", list: "oc-groups" })}
+          </div>
+          <div class="toggles">
+            ${this._toggle(idx, "krydderi", !!i.krydderi, "Krydderi")}
+            ${this._toggle(idx, "noegle", !!i.noegle, "Skalér efter denne")}
+            ${this._toggle(idx, "fast", i.skaler === false, "Fast mængde")}
+          </div>
+          <div class="row-actions">
+            <button class="btn quiet" data-action="ing-up" data-ing="${idx}" ${idx === 0 ? "disabled" : ""}><ha-icon icon="mdi:arrow-up"></ha-icon>Flyt op</button>
+            <button class="btn quiet" data-action="ing-down" data-ing="${idx}" ${idx === list.length - 1 ? "disabled" : ""}><ha-icon icon="mdi:arrow-down"></ha-icon>Flyt ned</button>
+            <button class="btn danger" data-action="ing-del" data-ing="${idx}"><ha-icon icon="mdi:trash-can-outline"></ha-icon>Fjern</button>
+          </div>
+        </div>` : ""}
+      </div>`;
+    }).join("");
+  }
+
+  _stepRows() {
+    const list = this._draft.trin;
+    return list.map((t, idx) => `
+      <div class="step-item">
+        <span class="num">${idx + 1}</span>
+        <div>
+          <textarea rows="3" data-trin="${idx}" placeholder="Beskriv trinnet">${esc(t.tekst)}</textarea>
+          ${t.billeder.length ? `<div class="e-thumbs">${t.billeder.map((b, bi) => `
+            <div class="e-thumb"><img src="${esc(imgUrl(b, true))}" alt="">
+              <button class="x" data-action="step-img-del" data-trin="${idx}" data-bi="${bi}" aria-label="Fjern billede"><ha-icon icon="mdi:close"></ha-icon></button></div>`).join("")}</div>` : ""}
+          <div class="step-tools">
+            <label class="btn upload"><ha-icon icon="mdi:camera-plus-outline"></ha-icon>Tilføj billede
+              <input type="file" accept="image/*" multiple data-upload="trin" data-trin="${idx}"></label>
+            <span class="spacer"></span>
+            <button class="btn quiet" data-action="step-up" data-trin="${idx}" ${idx === 0 ? "disabled" : ""} aria-label="Flyt trin op"><ha-icon icon="mdi:arrow-up"></ha-icon></button>
+            <button class="btn quiet" data-action="step-down" data-trin="${idx}" ${idx === list.length - 1 ? "disabled" : ""} aria-label="Flyt trin ned"><ha-icon icon="mdi:arrow-down"></ha-icon></button>
+            <button class="btn danger" data-action="step-del" data-trin="${idx}" aria-label="Fjern trin"><ha-icon icon="mdi:trash-can-outline"></ha-icon></button>
+          </div>
         </div>
       </div>`).join("");
+  }
+
+  _mainImage() {
+    const d = this._draft;
+    return d.billede
+      ? `<img src="${esc(imgUrl(d.billede, true))}" alt="">
+         <label class="btn upload"><ha-icon icon="mdi:camera-flip-outline"></ha-icon>Skift billede
+           <input type="file" accept="image/*" data-upload="main"></label>
+         <button class="btn danger" data-action="main-del"><ha-icon icon="mdi:trash-can-outline"></ha-icon>Fjern</button>`
+      : `<div class="ph"><ha-icon icon="mdi:image-outline"></ha-icon></div>
+         <label class="btn upload"><ha-icon icon="mdi:camera-plus-outline"></ha-icon>Vælg billede
+           <input type="file" accept="image/*" data-upload="main"></label>`;
   }
 
   _editor() {
@@ -498,51 +656,80 @@ class OpskriftCard extends HTMLElement {
     const cats = [...new Set(this._recipes.map((r) => r.kategori).filter(Boolean))];
     const groups = [...new Set(["Ingredienser", "Serveres med", "Sauce", "Dressing", "Topping",
       ...this._recipes.flatMap((r) => r.ingredienser.map((i) => i.gruppe)).filter(Boolean)])];
+    const busy = this._saving ? "Gemmer…" : this._uploading ? "Uploader billede…" : "";
     return `
-      <div class="head">
-        <button class="icon-btn" data-action="cancel" aria-label="Annullér"><ha-icon icon="mdi:close"></ha-icon></button>
-        <div class="info"><div class="primary big">${isNew ? "Ny opskrift" : "Redigér opskrift"}</div></div>
-        <button class="btn primary-btn" data-action="save" ${this._saving ? "disabled" : ""}>${this._saving ? "Gemmer…" : "Gem"}</button>
-      </div>
-      <div class="form" style="${rgb(d.farve)}">
+      <div class="editor" style="${rgb(d.farve)}">
+        <div class="e-top">
+          <button class="icon-btn" data-action="cancel" aria-label="Annullér"><ha-icon icon="mdi:close"></ha-icon></button>
+          <div class="title">${isNew ? "Ny opskrift" : "Redigér opskrift"}</div>
+          <span class="busy">${esc(busy)}</span>
+          <button class="btn primary-btn" data-action="save" ${this._saving || this._uploading ? "disabled" : ""}>Gem</button>
+        </div>
         <datalist id="oc-cats">${cats.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
         <datalist id="oc-units">${UNITS.map((u) => `<option value="${esc(u)}">`).join("")}</datalist>
         <datalist id="oc-groups">${groups.map((g) => `<option value="${esc(g)}">`).join("")}</datalist>
-        ${this._field("Navn", "navn", d.navn, { placeholder: "Fx Nem smørkylling" })}
-        <div class="cols">
-          ${this._field("Kategori", "kategori", d.kategori, { list: "oc-cats", placeholder: "Fx Aftensmad" })}
-          ${this._field("Tid", "tid", d.tid, { placeholder: "Fx 20 min" })}
+        ${this._formError ? `<div class="e-error">${esc(this._formError)}</div>` : ""}
+
+        <div class="e-card">
+          <div class="e-h">Grundoplysninger</div>
+          ${this._field("Navn", "navn", d.navn, { placeholder: "Fx Nem smørkylling" })}
+          <div class="cols">
+            ${this._field("Kategori", "kategori", d.kategori, { list: "oc-cats", placeholder: "Fx Aftensmad" })}
+            ${this._field("Tid", "tid", d.tid, { placeholder: "Fx 20 min" })}
+          </div>
+          <div class="cols">
+            ${this._field("Personer", "personer", d.personer, { mode: "decimal" })}
+            ${this._field("Krydderistyrke (%)", "krydderistyrke", d.krydderistyrke, { mode: "numeric" })}
+          </div>
+          <div class="cols">
+            ${this._field("Ikon", "ikon", d.ikon, { placeholder: "mdi:food" })}
+            <label class="fld"><span>Farve</span><select data-f="farve">${Object.entries(COLORS).map(([k, [l]]) =>
+              `<option value="${k}" ${k === d.farve ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
+          </div>
         </div>
-        <div class="cols">
-          ${this._field("Personer", "personer", d.personer, { mode: "decimal" })}
-          ${this._field("Krydderistyrke (%)", "krydderistyrke", d.krydderistyrke, { mode: "numeric" })}
+
+        <div class="e-card">
+          <div class="e-h">Billede</div>
+          <div class="mainimg">${this._mainImage()}</div>
         </div>
-        <div class="cols">
-          ${this._field("Ikon", "ikon", d.ikon, { placeholder: "mdi:food" })}
-          <label class="fld"><span>Farve</span><select data-f="farve">${Object.entries(COLORS).map(([k, [l]]) =>
-            `<option value="${k}" ${k === d.farve ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
+
+        <div class="e-card">
+          <div class="e-h">Ingredienser <span class="count">${d.ingredienser.length}</span></div>
+          <div class="e-hint">Tryk på en ingrediens for at rette den.</div>
+          <div class="ing-list">${this._ingEditRows()}</div>
+          <button class="btn add-row" data-action="ing-add"><ha-icon icon="mdi:plus"></ha-icon>Tilføj ingrediens</button>
         </div>
-        ${this._field("Billede (URL, valgfrit)", "billede", d.billede, { placeholder: "/local/opskrifter/billede.jpg" })}
-        <div class="h">Ingredienser</div>
-        <div class="ings-edit">${this._ingEditRows()}</div>
-        <button class="btn" data-action="ing-add"><ha-icon icon="mdi:plus"></ha-icon>Tilføj ingrediens</button>
-        <div class="h">Fremgangsmåde</div>
-        <label class="fld"><span>Ét trin pr. linje</span><textarea rows="7" data-f="fremgangTekst">${esc(d.fremgangTekst)}</textarea></label>
-        <label class="fld"><span>Noter</span><textarea rows="3" data-f="noter">${esc(d.noter)}</textarea></label>
-        ${this._formError ? `<div class="error">${esc(this._formError)}</div>` : ""}
-        <div class="actions">
+
+        <div class="e-card">
+          <div class="e-h">Fremgangsmåde</div>
+          <div class="steps-edit">${this._stepRows()}</div>
+          <button class="btn add-row" data-action="step-add"><ha-icon icon="mdi:plus"></ha-icon>Tilføj trin</button>
+        </div>
+
+        <div class="e-card">
+          <div class="e-h">Noter</div>
+          <label class="fld"><textarea rows="3" data-f="noter" aria-label="Noter">${esc(d.noter)}</textarea></label>
+        </div>
+
+        <div class="e-bottom">
           ${isNew ? "" : `<button class="btn danger" data-action="delete">${this._confirmDelete ? "Tryk igen for at slette" : "Slet opskrift"}</button>`}
           <div class="right">
             <button class="btn" data-action="cancel">Annullér</button>
-            <button class="btn primary-btn" data-action="save" ${this._saving ? "disabled" : ""}>${this._saving ? "Gemmer…" : "Gem"}</button>
+            <button class="btn primary-btn" data-action="save" ${this._saving || this._uploading ? "disabled" : ""}>Gem</button>
           </div>
         </div>
       </div>`;
   }
 
-  _rerenderIngredients() {
-    const box = this.shadowRoot.querySelector(".ings-edit");
-    if (box) box.innerHTML = this._ingEditRows();
+  _rerender(selector, html) {
+    const el = this.shadowRoot.querySelector(selector);
+    if (el) el.innerHTML = html;
+    else this._render();
+  }
+
+  _updateIngHead(idx) {
+    const head = this.shadowRoot.querySelector(`.ing-head[data-ing="${idx}"]`);
+    if (head) head.innerHTML = this._ingHeadInner(this._draft.ingredienser[idx], idx);
   }
 
   _buildRecipe() {
@@ -583,10 +770,44 @@ class OpskriftCard extends HTMLElement {
       if (i.trin > 0) o.trin = Number(i.trin);
       r.ingredienser.push(o);
     });
-    r.fremgang = txt(d.fremgangTekst).split("\n")
-      .map((s) => s.replace(/^\s*\d+[.)]\s*/, "").trim())
-      .filter(Boolean);
+    r.fremgang = d.trin
+      .map((t) => ({ tekst: txt(t.tekst), billeder: t.billeder || [] }))
+      .filter((t) => t.tekst || t.billeder.length);
     return r;
+  }
+
+  async _upload(file) {
+    const fd = new FormData();
+    fd.append("fil", file, file.name || "billede.jpg");
+    const res = await this._hass.fetchWithAuth("/api/opskrifter/billede", { method: "POST", body: fd });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { msg = (await res.json()).message || msg; } catch (e) { /* ignore */ }
+      throw new Error(msg);
+    }
+    return (await res.json()).id;
+  }
+
+  async _handleUpload(input) {
+    const files = [...(input.files || [])];
+    if (!files.length || !this._draft) return;
+    const target = input.dataset.upload;
+    const idx = Number(input.dataset.trin);
+    this._uploading += 1;
+    this._formError = null;
+    this._render();
+    try {
+      for (const f of files) {
+        const id = await this._upload(f);
+        if (!this._draft) break;
+        if (target === "main") this._draft.billede = id;
+        else this._draft.trin[idx]?.billeder.push(id);
+      }
+    } catch (err) {
+      this._formError = `Billedet kunne ikke uploades: ${err.message}`;
+    }
+    this._uploading -= 1;
+    if (this._draft) this._render();
   }
 
   async _save() {
@@ -662,6 +883,9 @@ class OpskriftCard extends HTMLElement {
     if (!el || el.disabled) return;
     const a = el.dataset.action;
 
+    if (a === "close-lightbox") { this._lightbox = null; return this._render(); }
+    if (a === "zoom") { this._lightbox = el.dataset.src; return this._render(); }
+
     // liste og navigation
     if (a === "open") return this._setOpen(el.dataset.id);
     if (a === "back") return this._setOpen(null);
@@ -672,6 +896,7 @@ class OpskriftCard extends HTMLElement {
     if (a === "import") return this._import();
     if (a === "new" || a === "edit") {
       this._draft = this._newDraft(a === "edit" ? this._current() : null);
+      this._openIng = a === "new" ? 0 : null;
       this._formError = null;
       this._confirmDelete = false;
       return this._render();
@@ -681,38 +906,64 @@ class OpskriftCard extends HTMLElement {
     if (this._draft) {
       const d = this._draft;
       const idx = Number(el.dataset.ing);
-      if (a === "cancel") { this._draft = null; return this._render(); }
-      if (a === "save") return this._save();
-      if (a === "delete") return this._delete();
-      if (a === "ing-add") {
-        d.ingredienser.push({ navn: "" });
-        this._rerenderIngredients();
-        const inputs = this.shadowRoot.querySelectorAll('.ings-edit input[data-k="maengde"]');
-        inputs[inputs.length - 1]?.focus();
-        return;
-      }
-      if (a === "ing-del") { d.ingredienser.splice(idx, 1); return this._rerenderIngredients(); }
-      if (a === "ing-up" && idx > 0) {
-        [d.ingredienser[idx - 1], d.ingredienser[idx]] = [d.ingredienser[idx], d.ingredienser[idx - 1]];
-        return this._rerenderIngredients();
-      }
-      if (a === "ing-down" && idx < d.ingredienser.length - 1) {
-        [d.ingredienser[idx + 1], d.ingredienser[idx]] = [d.ingredienser[idx], d.ingredienser[idx + 1]];
-        return this._rerenderIngredients();
-      }
-      if (a === "flag") {
-        const i = d.ingredienser[idx];
-        const k = el.dataset.k;
-        if (k === "fast") {
-          if (i.skaler === false) delete i.skaler; else i.skaler = false;
-          el.classList.toggle("on", i.skaler === false);
-        } else {
-          i[k] = !i[k];
-          el.classList.toggle("on", !!i[k]);
+      const ti = Number(el.dataset.trin);
+      switch (a) {
+        case "cancel": this._draft = null; return this._render();
+        case "save": return this._save();
+        case "delete": return this._delete();
+        case "main-del": d.billede = ""; return this._rerender(".mainimg", this._mainImage());
+        case "ing-toggle":
+          this._openIng = this._openIng === idx ? null : idx;
+          return this._rerender(".ing-list", this._ingEditRows());
+        case "ing-add":
+          d.ingredienser.push({ navn: "" });
+          this._openIng = d.ingredienser.length - 1;
+          this._rerender(".ing-list", this._ingEditRows());
+          this.shadowRoot.querySelector(`.ing-body input[data-k="maengde"]`)?.focus();
+          return;
+        case "ing-del":
+          d.ingredienser.splice(idx, 1);
+          this._openIng = null;
+          return this._rerender(".ing-list", this._ingEditRows());
+        case "ing-up":
+        case "ing-down": {
+          const to = a === "ing-up" ? idx - 1 : idx + 1;
+          if (to < 0 || to >= d.ingredienser.length) return;
+          [d.ingredienser[to], d.ingredienser[idx]] = [d.ingredienser[idx], d.ingredienser[to]];
+          this._openIng = to;
+          return this._rerender(".ing-list", this._ingEditRows());
         }
-        return;
+        case "flag": {
+          const i = d.ingredienser[idx];
+          const k = el.dataset.k;
+          if (k === "fast") {
+            if (i.skaler === false) delete i.skaler; else i.skaler = false;
+          } else {
+            i[k] = !i[k];
+          }
+          return this._rerender(".ing-list", this._ingEditRows());
+        }
+        case "step-add":
+          d.trin.push({ tekst: "", billeder: [] });
+          this._rerender(".steps-edit", this._stepRows());
+          this.shadowRoot.querySelector(`textarea[data-trin="${d.trin.length - 1}"]`)?.focus();
+          return;
+        case "step-del":
+          d.trin.splice(ti, 1);
+          return this._rerender(".steps-edit", this._stepRows());
+        case "step-up":
+        case "step-down": {
+          const to = a === "step-up" ? ti - 1 : ti + 1;
+          if (to < 0 || to >= d.trin.length) return;
+          [d.trin[to], d.trin[ti]] = [d.trin[ti], d.trin[to]];
+          return this._rerender(".steps-edit", this._stepRows());
+        }
+        case "step-img-del":
+          d.trin[ti].billeder.splice(Number(el.dataset.bi), 1);
+          return this._rerender(".steps-edit", this._stepRows());
+        default:
+          return;
       }
-      return;
     }
 
     // detaljevisning
@@ -751,15 +1002,26 @@ class OpskriftCard extends HTMLElement {
       return;
     }
     if (!this._draft) return;
-    if (t.dataset.f) this._draft[t.dataset.f] = t.value;
-    else if (t.dataset.ing !== undefined) this._draft.ingredienser[Number(t.dataset.ing)][t.dataset.k] = t.value;
+    if (t.dataset.f) {
+      this._draft[t.dataset.f] = t.value;
+    } else if (t.dataset.ing !== undefined) {
+      const idx = Number(t.dataset.ing);
+      this._draft.ingredienser[idx][t.dataset.k] = t.value;
+      if (["navn", "maengde", "enhed", "gruppe"].includes(t.dataset.k)) this._updateIngHead(idx);
+    } else if (t.dataset.trin !== undefined && t.tagName === "TEXTAREA") {
+      this._draft.trin[Number(t.dataset.trin)].tekst = t.value;
+    }
   }
 
   _onChange(e) {
     const t = e.target;
+    if (this._draft && t.dataset.upload) {
+      this._handleUpload(t);
+      return;
+    }
     if (this._draft && t.dataset.f === "farve") {
       this._draft.farve = t.value;
-      this.shadowRoot.querySelector(".form")?.setAttribute("style", rgb(t.value));
+      this.shadowRoot.querySelector(".editor")?.setAttribute("style", rgb(t.value));
       return;
     }
     if (t.dataset.input !== "value") return;
@@ -785,12 +1047,14 @@ class OpskriftCard extends HTMLElement {
         return `<tr><td class="a">${v === null ? "" : `${fmtAmount(v, i.enhed)} ${esc(i.enhed || "")}`}</td>
           <td>${esc(i.navn)}${i.note ? `<div class="n">${esc(i.note)}</div>` : ""}</td></tr>`;
       }).join("")}</table>`).join("");
+    const hero = r.billede ? `<img class="hero" src="${esc(new URL(imgUrl(r.billede), location.href).href)}" alt="">` : "";
     const html = `<!doctype html><html lang="da"><head><meta charset="utf-8"><title>${esc(r.navn)}</title>
       <style>${PRINT_STYLE}</style></head><body>
       <h1>${esc(r.navn)}</h1>
       <p class="sub">${esc([this._summary(r, s), r.tid].filter(Boolean).join(", "))}</p>
+      ${hero}
       ${groups}
-      ${r.fremgang.length ? `<h2>Fremgangsmåde</h2><ol>${r.fremgang.map((t) => `<li>${esc(t)}</li>`).join("")}</ol>` : ""}
+      ${r.fremgang.length ? `<h2>Fremgangsmåde</h2><ol>${r.fremgang.map((t) => `<li>${esc(t.tekst)}</li>`).join("")}</ol>` : ""}
       ${r.noter ? `<h2>Noter</h2><p class="notes">${esc(r.noter)}</p>` : ""}
       </body></html>`;
 
@@ -803,14 +1067,21 @@ class OpskriftCard extends HTMLElement {
     doc.close();
     const cleanup = () => setTimeout(() => frame.remove(), 500);
     frame.contentWindow.addEventListener("afterprint", cleanup);
-    setTimeout(() => {
+    const go = () => {
       try {
         frame.contentWindow.focus();
         frame.contentWindow.print();
       } catch (err) {
         cleanup();
       }
-    }, 250);
+    };
+    const img = doc.querySelector("img");
+    if (img && !img.complete) {
+      img.addEventListener("load", go, { once: true });
+      img.addEventListener("error", go, { once: true });
+    } else {
+      setTimeout(go, 250);
+    }
     setTimeout(() => frame.isConnected && frame.remove(), 120000);
   }
 }
@@ -821,7 +1092,7 @@ if (!customElements.get("opskrift-card")) {
   window.customCards.push({
     type: "opskrift-card",
     name: "Opskrift-kort",
-    description: "Opskriftssamling med redigering og skalering efter personer, nøgleingrediens og krydderistyrke",
+    description: "Opskriftssamling med billeder, redigering og skalering efter personer, nøgleingrediens og krydderistyrke",
   });
   console.info(`%c OPSKRIFT-CARD %c v${OC_VERSION} `,
     "color:#fff;background:#ff9800;font-weight:700;border-radius:3px 0 0 3px",
