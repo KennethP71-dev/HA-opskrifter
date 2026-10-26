@@ -6,6 +6,7 @@ En opskriftssamling, der bor i Home Assistant. Du kan oprette, rette og slette o
 - Ændringer vises med det samme på alle åbne dashboards og enheder.
 - Kortet indlæses automatisk af integrationen. Du skal ikke oprette en ressource.
 - Første gang integrationen sættes op, lægges "Nem smørkylling" ind som eksempel.
+- Billeder (hovedbillede og billeder pr. trin) uploades direkte fra editoren. De skaleres ned og gemmes i `/config/opskrifter/billeder`, som også kommer med i backups. Ubrugte billeder ryddes op automatisk.
 
 ## Installation via HACS
 
