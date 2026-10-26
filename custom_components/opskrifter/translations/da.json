@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Opskrifter",
+        "description": "Opret opskriftssamlingen. Tilføj bagefter kortet med typen custom:opskrift-card."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Opskrifter er allerede sat op."
+    }
+  }
+}
