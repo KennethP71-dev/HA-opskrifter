@@ -1,13 +1,14 @@
 """Konstanter for Opskrifter."""
 
 DOMAIN = "opskrifter"
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 
 STORAGE_KEY = "opskrifter.data"
 STORAGE_VERSION = 1
 
 SIGNAL_UPDATED = "opskrifter_updated"
 URL_BASE = "/opskrifter_static"
+CARD_FILE = "opskrift-card.js"
 DATA_REGISTERED = "opskrifter_registered"
 
 # Lægges ind første gang integrationen sættes op
