@@ -2,7 +2,7 @@
  * Opskrift-card – frontend til integrationen Opskrifter
  * Indlæses automatisk af integrationen. Kort-type: custom:opskrift-card
  */
-const OC_VERSION = "1.2.0";
+const OC_VERSION = "1.2.1";
 
 const COLORS = {
   red: ["Rød", "244, 67, 54"], pink: ["Pink", "233, 30, 99"], purple: ["Lilla", "156, 39, 176"],
@@ -197,6 +197,8 @@ ha-card{padding:12px;overflow:hidden}
 .star{width:36px;height:36px;border:none;background:none;padding:0;cursor:pointer;color:var(--secondary-text-color);--mdc-icon-size:24px;display:flex;align-items:center;justify-content:center}
 .star.on{color:rgb(var(--rgb-amber-color,255,193,7))}
 .star:focus-visible{outline:2px solid var(--primary-color);outline-offset:-2px;border-radius:8px}
+.printnote{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.printnote a.open{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:12px;background:rgb(var(--oc-rgb));color:#fff;font-weight:700;font-size:13px;text-decoration:none;--mdc-icon-size:18px}
 .avg{font-size:12px;font-weight:700;color:rgb(var(--rgb-amber-color,255,193,7))}
 
 /* ---------- editor: altid lyst tema ---------- */
@@ -329,6 +331,8 @@ class OpskriftCard extends HTMLElement {
     this._newTag = "";
     this._histOpen = false;
     this._aiBusy = false;
+    this._printLink = null;
+    this._printBusy = false;
     const root = this.shadowRoot;
     root.addEventListener("click", (e) => this._onClick(e));
     root.addEventListener("input", (e) => this._onInput(e));
@@ -671,6 +675,9 @@ class OpskriftCard extends HTMLElement {
         ${this._readonly ? "" : `<button class="icon-btn" data-action="edit" aria-label="Redigér opskrift"><ha-icon icon="mdi:pencil-outline"></ha-icon></button>`}
         <button class="icon-btn" data-action="print" aria-label="Print opskrift"><ha-icon icon="mdi:printer-outline"></ha-icon></button>
       </div>
+      ${this._printBusy || this._printLink ? `<div class="notice printnote" style="${rgb(r.farve)}">${this._printBusy
+        ? "Gør udskriften klar…"
+        : `<span>Udskriften er klar.</span><a class="open" href="${esc(this._printLink)}" target="_blank" rel="noopener" data-action="print-open"><ha-icon icon="mdi:printer-outline"></ha-icon>Åbn og udskriv</a><button class="link" data-action="print-close">Luk</button>`}</div>` : ""}
       ${r.billede ? `<button class="hero" data-action="zoom" data-src="${esc(imgUrl(r.billede))}" aria-label="Vis billedet i stor størrelse"><img src="${esc(imgUrl(r.billede))}" alt=""></button>` : ""}
       ${r.maerker.length ? `<div class="tagline" style="${rgb(r.farve)}">${r.maerker.map((t) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}
       <div style="${rgb(r.farve)}">
@@ -1176,6 +1183,7 @@ class OpskriftCard extends HTMLElement {
   _setOpen(id, render = true) {
     this._openId = id;
     this._notice = null;
+    this._printLink = null;
     try {
       if (id) localStorage.setItem(this._key + ":open", id);
       else localStorage.removeItem(this._key + ":open");
@@ -1313,6 +1321,11 @@ class OpskriftCard extends HTMLElement {
     const r = this._current();
     if (!r) return;
     if (a === "print") return this._print(r);
+    if (a === "print-open") {
+      setTimeout(() => { this._printLink = null; this._render(); }, 800);
+      return;
+    }
+    if (a === "print-close") { this._printLink = null; return this._render(); }
     if (a === "hist") {
       e.preventDefault();
       this._histOpen = !this._histOpen;
@@ -1411,7 +1424,50 @@ class OpskriftCard extends HTMLElement {
   }
 
   /* ---------- print ---------- */
+  _needsPrintPage() {
+    const ua = navigator.userAgent || "";
+    const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    return ios || /Home ?Assistant/i.test(ua);
+  }
+
+  _printData(r, s) {
+    return {
+      titel: r.navn,
+      under: [this._summary(r, s), r.tid].filter(Boolean).join(", "),
+      billede: IMAGE_ID.test(r.billede || "") ? r.billede : null,
+      grupper: this._groups(r).map(([g, items]) => ({
+        navn: g,
+        linjer: items.map((i) => {
+          const v = this._scaled(i, s);
+          return { maengde: v === null ? "" : `${fmtAmount(v, i.enhed)} ${i.enhed || ""}`.trim(), navn: i.navn, note: i.note || "" };
+        }),
+      })),
+      trin: r.fremgang.map((t) => t.tekst),
+      noter: r.noter || "",
+    };
+  }
+
+  async _printViaServer(r) {
+    this._printBusy = true;
+    this._printLink = null;
+    this._render();
+    try {
+      const res = await this._hass.fetchWithAuth("/api/opskrifter/udskrift", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(this._printData(r, this._getState(r))),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      this._printLink = new URL((await res.json()).url, location.origin).href;
+    } catch (err) {
+      this._notice = `Udskriften kunne ikke laves: ${err?.message || err}`;
+    }
+    this._printBusy = false;
+    this._render();
+  }
+
   _print(r) {
+    if (this._needsPrintPage()) return this._printViaServer(r);
     const s = this._getState(r);
     const groups = this._groups(r).map(([g, items]) => `
       <h2>${esc(g)}</h2>
