@@ -2,7 +2,7 @@
  * Opskrift-card – frontend til integrationen Opskrifter
  * Indlæses automatisk af integrationen. Kort-type: custom:opskrift-card
  */
-const OC_VERSION = "1.1.1";
+const OC_VERSION = "1.2.0";
 
 const COLORS = {
   red: ["Rød", "244, 67, 54"], pink: ["Pink", "233, 30, 99"], purple: ["Lilla", "156, 39, 176"],
@@ -13,6 +13,30 @@ const COLORS = {
 };
 const UNITS = ["g", "kg", "ml", "dl", "l", "tsk.", "spsk.", "fed", "nip", "stk.", "dåse", "bdt.", "skiver"];
 const IMAGE_ID = /^[0-9a-f]{32}$/;
+const TAG_SUGGESTIONS = ["Kylling", "Oksekød", "Svinekød", "Lam", "Fisk", "Skaldyr", "Vegetar", "Grøntsager",
+  "Pasta", "Ris", "Suppe", "Salat", "Spicy", "Hurtig", "Børnevenlig", "Fest", "Dessert"];
+const SORTS = [["navn", "Navn"], ["sidst", "Senest lavet"], ["laengst", "Længst siden"],
+  ["populaer", "Mest lavet"], ["bedst", "Bedst bedømt"]];
+const isoDate = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const todayIso = () => isoDate(new Date());
+const yesterdayIso = () => { const d = new Date(); d.setDate(d.getDate() - 1); return isoDate(d); };
+const parseIso = (iso) => { const [y, m, d] = String(iso).split("-").map(Number); return new Date(y, m - 1, d); };
+function relDate(iso) {
+  if (!iso) return "";
+  const then = parseIso(iso);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const days = Math.round((now - then) / 86400000);
+  if (days === 0) return "i dag";
+  if (days === 1) return "i går";
+  if (days > 1 && days < 14) return `for ${days} dage siden`;
+  if (days >= 14 && days < 63) return `for ${Math.round(days / 7)} uger siden`;
+  return then.toLocaleDateString("da-DK", { day: "numeric", month: "short", year: "numeric" });
+}
+const fmtDate = (iso) =>
+  parseIso(iso).toLocaleDateString("da-DK", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
+const fmtStars = (v) => v.toLocaleString("da-DK", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 const rgb = (f) => {
   const name = COLORS[f] ? f : "orange";
@@ -81,6 +105,9 @@ function normalize(list) {
       fremgang: (r.fremgang || []).map((s) =>
         typeof s === "string" ? { tekst: s, billeder: [] } : { tekst: s?.tekst || "", billeder: s?.billeder || [] }),
       krydderistyrke: r.krydderistyrke ?? 100,
+      maerker: Array.isArray(r.maerker) ? r.maerker : [],
+      historik: [...(Array.isArray(r.historik) ? r.historik : [])].sort().reverse(),
+      vurderinger: r.vurderinger && typeof r.vurderinger === "object" ? r.vurderinger : {},
     }))
     .sort((a, b) => a.navn.localeCompare(b.navn, "da"));
 }
@@ -140,6 +167,37 @@ ha-card{padding:12px;overflow:hidden}
 .lightbox img{max-width:100%;max-height:100%;border-radius:8px;object-fit:contain}
 .lightbox .icon-btn{position:absolute;top:12px;right:12px;color:#fff;background:rgba(255,255,255,.12)}
 .search:focus-visible,.chip:focus-visible,.row:focus-visible,.step:focus-visible,.icon-btn:focus-visible,.link:focus-visible,.thumb:focus-visible,.hero:focus-visible{outline:2px solid var(--primary-color);outline-offset:2px}
+
+.toolbar{display:flex;gap:8px;align-items:center;margin:4px 0 8px}
+.toolbar .search{margin:0;flex:1;min-width:0}
+.sort{flex:none;height:40px;border-radius:12px;border:none;padding:0 10px;font:inherit;font-size:13px;font-weight:600;background:rgba(var(--rgb-primary-text-color,0,0,0),.05);color:var(--primary-text-color);max-width:45%}
+.chips.tags{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.chips.tags::-webkit-scrollbar{display:none}
+.chips.tags .chip{flex:none}
+.meta-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.meta-row .s{display:inline-flex;align-items:center;gap:3px;--mdc-icon-size:14px}
+.meta-row .s.star-c{color:rgb(var(--rgb-amber-color,255,193,7));font-weight:700}
+.tagline{display:flex;flex-wrap:wrap;gap:6px;margin:0 4px 12px}
+.tagline span{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:rgba(var(--oc-rgb),.14);color:rgb(var(--oc-rgb))}
+.panel .h{margin-bottom:10px}
+.made{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 8px}
+.made .big{font-size:18px;font-weight:700;color:var(--primary-text-color)}
+.chip.accent{background:rgba(var(--oc-rgb),.22);color:rgb(var(--oc-rgb))}
+.chip.date{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:6px;--mdc-icon-size:16px}
+.chip.date input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:16px}
+.hist summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--secondary-text-color);margin:2px 0 4px}
+.hist ul{list-style:none;margin:2px 0 6px;padding:0}
+.hist li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 0;font-size:13px;color:var(--primary-text-color);border-bottom:1px solid var(--divider-color)}
+.hist li:last-child{border-bottom:none}
+.hist .icon-btn{width:30px;height:30px;--mdc-icon-size:16px;color:var(--secondary-text-color)}
+.divider{height:1px;background:var(--divider-color);margin:12px 0}
+.rate{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:1px 0}
+.rate .who{font-size:14px;font-weight:600;color:var(--primary-text-color);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stars{display:flex;flex:none}
+.star{width:36px;height:36px;border:none;background:none;padding:0;cursor:pointer;color:var(--secondary-text-color);--mdc-icon-size:24px;display:flex;align-items:center;justify-content:center}
+.star.on{color:rgb(var(--rgb-amber-color,255,193,7))}
+.star:focus-visible{outline:2px solid var(--primary-color);outline-offset:-2px;border-radius:8px}
+.avg{font-size:12px;font-weight:700;color:rgb(var(--rgb-amber-color,255,193,7))}
 
 /* ---------- editor: altid lyst tema ---------- */
 ha-card.editing{--ha-card-background:#eef0f3;background:#eef0f3;color:#1c1f24;padding:0}
@@ -211,6 +269,16 @@ ha-card.editing{--ha-card-background:#eef0f3;background:#eef0f3;color:#1c1f24;pa
 .e-bottom{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 12px 0}
 .e-bottom .right{display:flex;gap:8px;margin-left:auto}
 .busy{font-size:13px;color:var(--e-muted)}
+.tag-pick{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.e-card.ai{border-color:var(--e-accent);background:linear-gradient(0deg,var(--e-tint),var(--e-tint)),#fff}
+.ai-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.spinner{width:18px;height:18px;border-radius:50%;border:2px solid var(--e-tint);border-top-color:var(--e-accent);animation:spin 0.9s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spinner{animation-duration:3s}}
+.add-tag,.fam-row{display:flex;gap:8px;align-items:center}
+.fam-row{margin:0 0 8px}
+.add-tag input,.fam-row input{flex:1;box-sizing:border-box;min-width:0;border:1px solid var(--e-border);border-radius:10px;padding:9px 11px;font:inherit;font-size:15px;background:#fff;color:var(--e-text);outline:none}
+.add-tag input:focus,.fam-row input:focus{border-color:var(--e-accent);box-shadow:0 0 0 3px var(--e-tint)}
 @media (max-width:520px){
   .cols{grid-template-columns:1fr}
   .cols3{grid-template-columns:76px 88px 1fr}
@@ -254,6 +322,13 @@ class OpskriftCard extends HTMLElement {
     this._notice = null;
     this._lightbox = null;
     this._retry = null;
+    this._familie = [];
+    this._tags = new Set();
+    this._sort = "navn";
+    this._famDraft = null;
+    this._newTag = "";
+    this._histOpen = false;
+    this._aiBusy = false;
     const root = this.shadowRoot;
     root.addEventListener("click", (e) => this._onClick(e));
     root.addEventListener("input", (e) => this._onInput(e));
@@ -262,6 +337,11 @@ class OpskriftCard extends HTMLElement {
       if (e.key === "Escape" && this._lightbox) {
         this._lightbox = null;
         this._render();
+        return;
+      }
+      if (e.key === "Enter" && e.target.dataset?.input === "newtag") {
+        e.preventDefault();
+        this._addTag();
         return;
       }
       if ((e.key === "Enter" || e.key === " ") && e.target.classList?.contains("row")) {
@@ -278,7 +358,10 @@ class OpskriftCard extends HTMLElement {
   setConfig(config) {
     this._config = config || {};
     this._key = "opskrift-card:" + (slug(this._config.titel) || "opskrifter");
-    try { this._openId = localStorage.getItem(this._key + ":open") || null; } catch (e) { /* ignore */ }
+    try {
+      this._openId = localStorage.getItem(this._key + ":open") || null;
+      this._sort = localStorage.getItem(this._key + ":sort") || "navn";
+    } catch (e) { /* ignore */ }
     this._render();
   }
 
@@ -309,7 +392,7 @@ class OpskriftCard extends HTMLElement {
     this._subscribing = true;
     try {
       this._unsub = await this._hass.connection.subscribeMessage(
-        (msg) => this._onData(msg.opskrifter),
+        (msg) => this._onData(msg),
         { type: "opskrifter/subscribe" },
       );
       if (!this.isConnected) this.disconnectedCallback();
@@ -327,17 +410,52 @@ class OpskriftCard extends HTMLElement {
     this._subscribing = false;
   }
 
-  _onData(list) {
-    this._recipes = normalize(list);
+  _onData(data) {
+    this._recipes = normalize(data?.opskrifter);
+    this._familie = Array.isArray(data?.familie) ? data.familie : [];
     this._status = "ok";
     this._error = null;
-    if (this._draft) return; // forstyr ikke en igangværende redigering
+    if (this._draft || this._famDraft) return; // forstyr ikke en igangværende redigering
     this._render();
   }
 
   _legacy() {
     const names = new Set(this._recipes.map((r) => r.navn.trim().toLowerCase()));
     return normalize(this._config?.opskrifter || []).filter((r) => !names.has(r.navn.trim().toLowerCase()));
+  }
+
+  _avg(r) {
+    const vals = this._familie.map((p) => Number(r.vurderinger[p.id]) || 0).filter((v) => v > 0);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  }
+
+  _allTags() {
+    const count = new Map();
+    this._recipes.forEach((r) => r.maerker.forEach((t) => count.set(t, (count.get(t) || 0) + 1)));
+    return [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "da")).map(([t]) => t);
+  }
+
+  _sorted(list) {
+    const last = (r) => r.historik[0] || "";
+    const name = (a, b) => a.navn.localeCompare(b.navn, "da");
+    const cmp = {
+      navn: name,
+      sidst: (a, b) => last(b).localeCompare(last(a)) || name(a, b),
+      laengst: (a, b) => (last(a) || "9999").localeCompare(last(b) || "9999") || name(a, b),
+      populaer: (a, b) => b.historik.length - a.historik.length || name(a, b),
+      bedst: (a, b) => (this._avg(b) ?? -1) - (this._avg(a) ?? -1) || name(a, b),
+    }[this._sort] || name;
+    return [...list].sort(cmp);
+  }
+
+  async _ws(msg) {
+    try {
+      return await this._hass.callWS(msg);
+    } catch (err) {
+      this._notice = `Det lykkedes ikke: ${err?.message || err?.code || err}`;
+      this._render();
+      return null;
+    }
   }
 
   _modes(r) {
@@ -407,7 +525,10 @@ class OpskriftCard extends HTMLElement {
   _render() {
     let body;
     let cls = "";
-    if (this._draft) {
+    if (this._famDraft) {
+      body = this._familyEditor();
+      cls = "editing";
+    } else if (this._draft) {
       body = this._editor();
       cls = "editing";
     } else {
@@ -436,6 +557,7 @@ class OpskriftCard extends HTMLElement {
     const n = this._recipes.length;
     const legacy = this._status === "ok" && !this._readonly ? this._legacy() : [];
     const sub = this._status === "loading" ? "Henter…" : `${n} ${n === 1 ? "opskrift" : "opskrifter"}`;
+    const tags = this._allTags();
     return `
       <div class="head">
         <div class="shape"><ha-icon icon="${esc(c.ikon || "mdi:chef-hat")}"></ha-icon></div>
@@ -443,13 +565,21 @@ class OpskriftCard extends HTMLElement {
           <div class="primary">${esc(c.titel || "Opskrifter")}</div>
           <div class="secondary">${sub}</div>
         </div>
-        ${!this._readonly && this._status === "ok" ? `<button class="icon-btn" data-action="new" aria-label="Ny opskrift"><ha-icon icon="mdi:plus"></ha-icon></button>` : ""}
+        ${!this._readonly && this._status === "ok" ? `
+          <button class="icon-btn" data-action="settings" aria-label="Familie"><ha-icon icon="mdi:account-group-outline"></ha-icon></button>
+          <button class="icon-btn" data-action="new" aria-label="Ny opskrift"><ha-icon icon="mdi:plus"></ha-icon></button>` : ""}
       </div>
       ${this._error ? `<div class="error">${esc(this._error)}</div>` : ""}
       ${this._notice ? `<div class="notice">${esc(this._notice)}</div>` : ""}
       ${legacy.length ? `<div class="notice">Kortets YAML har ${legacy.length} ${legacy.length === 1 ? "opskrift" : "opskrifter"}, som ikke er i databasen.
         <button class="link" data-action="import">Importér</button></div>` : ""}
-      ${n > 1 ? `<input class="search" type="search" placeholder="Søg på navn eller ingrediens" value="${esc(this._q)}" data-input="search">` : ""}
+      ${n > 1 ? `<div class="toolbar">
+        <input class="search" type="search" placeholder="Søg på navn, ingrediens eller mærke" value="${esc(this._q)}" data-input="search">
+        <select class="sort" data-input="sort" aria-label="Sortér">${SORTS.map(([k, l]) =>
+          `<option value="${k}" ${k === this._sort ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>
+      </div>` : ""}
+      ${tags.length ? `<div class="chips tags">${this._tags.size ? `<button class="chip" data-action="tags-clear">Ryd</button>` : ""}${tags.map((t) =>
+        `<button class="chip ${this._tags.has(t) ? "on" : ""}" data-action="tag" data-value="${esc(t)}" aria-pressed="${this._tags.has(t)}">${esc(t)}</button>`).join("")}</div>` : ""}
       ${cats.length > 1 ? `<div class="chips">${["Alle", ...cats].map((k) =>
         `<button class="chip ${(k === "Alle" && !this._cat) || k === this._cat ? "on" : ""}" data-action="cat" data-value="${esc(k)}">${esc(k)}</button>`).join("")}</div>` : ""}
       <div class="list">${this._rows()}</div>`;
@@ -461,19 +591,62 @@ class OpskriftCard extends HTMLElement {
       return `<div class="empty">Ingen opskrifter endnu.${this._readonly ? "" : ` <button class="link" data-action="new">Opret den første</button>`}</div>`;
     }
     const q = this._q.trim().toLowerCase();
-    const list = this._recipes.filter((r) =>
+    const list = this._sorted(this._recipes.filter((r) =>
       (!this._cat || r.kategori === this._cat) &&
-      (!q || [r.navn, r.kategori, ...r.ingredienser.map((i) => i.navn)].join(" ").toLowerCase().includes(q)));
-    if (!list.length) return `<div class="empty">Ingen opskrifter matcher “${esc(this._q)}”.</div>`;
-    return list.map((r) => `
+      [...this._tags].every((t) => r.maerker.includes(t)) &&
+      (!q || [r.navn, r.kategori, ...r.maerker, ...r.ingredienser.map((i) => i.navn)].join(" ").toLowerCase().includes(q))));
+    if (!list.length) return `<div class="empty">Ingen opskrifter matcher søgningen.</div>`;
+    return list.map((r) => {
+      const avg = this._avg(r);
+      const made = r.historik.length ? `Lavet ${relDate(r.historik[0])}` : "Ikke lavet endnu";
+      const extra = this._sort === "populaer" && r.historik.length ? `, ${r.historik.length}×` : "";
+      return `
       <div class="row" data-action="open" data-id="${esc(r.id)}" tabindex="0" role="button">
         ${this._shape(r)}
         <div class="info">
           <div class="primary">${esc(r.navn)}</div>
-          <div class="secondary">${esc([r.personer ? `${fmtNum(r.personer)} pers.` : null, r.tid, r.kategori].filter(Boolean).join(", "))}</div>
+          <div class="secondary meta-row">
+            ${avg ? `<span class="s star-c"><ha-icon icon="mdi:star"></ha-icon>${fmtStars(avg)}</span>` : ""}
+            <span class="s">${esc(made + extra)}</span>
+            ${r.tid ? `<span class="s">${esc(r.tid)}</span>` : ""}
+          </div>
         </div>
         <ha-icon class="chev" icon="mdi:chevron-right"></ha-icon>
-      </div>`).join("");
+      </div>`;
+    }).join("");
+  }
+
+  _madePanel(r) {
+    const last = r.historik[0];
+    const n = r.historik.length;
+    const avg = this._avg(r);
+    return `
+        <div class="panel">
+          <div class="h">Lavet og bedømt</div>
+          ${this._notice ? `<div class="notice">${esc(this._notice)}</div>` : ""}
+          <div class="made">
+            <span class="big">${last ? esc(cap(relDate(last))) : "Ikke lavet endnu"}</span>
+            ${n ? `<span class="secondary">${n} ${n === 1 ? "gang" : "gange"} i alt</span>` : ""}
+          </div>
+          <div class="chips">
+            <button class="chip accent" data-action="cooked" data-dato="${todayIso()}">I dag</button>
+            <button class="chip" data-action="cooked" data-dato="${yesterdayIso()}">I går</button>
+            <label class="chip date"><ha-icon icon="mdi:calendar-month-outline"></ha-icon>Vælg dato
+              <input type="date" max="${todayIso()}" data-input="cooked-date" aria-label="Vælg dato for hvornår retten blev lavet"></label>
+          </div>
+          ${n ? `<details class="hist" ${this._histOpen ? "open" : ""}>
+            <summary data-action="hist">Historik (${n})</summary>
+            <ul>${r.historik.map((d) => `<li><span>${esc(cap(fmtDate(d)))}</span>
+              <button class="icon-btn" data-action="cooked-del" data-dato="${esc(d)}" aria-label="Fjern ${esc(fmtDate(d))}"><ha-icon icon="mdi:close"></ha-icon></button></li>`).join("")}</ul>
+          </details>` : ""}
+          <div class="divider"></div>
+          <div class="made"><span class="label" style="margin:0">Bedømmelser</span>${avg ? `<span class="avg">Gennemsnit ${fmtStars(avg)}</span>` : ""}</div>
+          ${this._familie.length ? this._familie.map((p) => {
+            const v = Number(r.vurderinger[p.id]) || 0;
+            return `<div class="rate"><span class="who">${esc(p.navn)}</span><span class="stars">${[1, 2, 3, 4, 5].map((st) =>
+              `<button class="star ${st <= v ? "on" : ""}" data-action="rate" data-person="${esc(p.id)}" data-stars="${st}" aria-label="${esc(p.navn)}: ${st} ${st === 1 ? "stjerne" : "stjerner"}" aria-pressed="${st <= v}"><ha-icon icon="${st <= v ? "mdi:star" : "mdi:star-outline"}"></ha-icon></button>`).join("")}</span></div>`;
+          }).join("") : `<div class="secondary">Tilføj familiemedlemmer under <button class="link" data-action="settings">Familie</button> for at give stjerner.</div>`}
+        </div>`;
   }
 
   _detail(r) {
@@ -493,12 +666,13 @@ class OpskriftCard extends HTMLElement {
         <div class="shape" style="${rgb(r.farve)}"><ha-icon icon="${esc(r.ikon || "mdi:silverware-fork-knife")}"></ha-icon></div>
         <div class="info">
           <div class="primary big">${esc(r.navn)}</div>
-          <div class="secondary">${esc([r.tid, r.kategori].filter(Boolean).join(", "))}</div>
+          <div class="secondary">${esc([r.tid, r.kategori, r.historik[0] ? `sidst lavet ${relDate(r.historik[0])}` : null].filter(Boolean).join(", "))}</div>
         </div>
         ${this._readonly ? "" : `<button class="icon-btn" data-action="edit" aria-label="Redigér opskrift"><ha-icon icon="mdi:pencil-outline"></ha-icon></button>`}
         <button class="icon-btn" data-action="print" aria-label="Print opskrift"><ha-icon icon="mdi:printer-outline"></ha-icon></button>
       </div>
       ${r.billede ? `<button class="hero" data-action="zoom" data-src="${esc(imgUrl(r.billede))}" aria-label="Vis billedet i stor størrelse"><img src="${esc(imgUrl(r.billede))}" alt=""></button>` : ""}
+      ${r.maerker.length ? `<div class="tagline" style="${rgb(r.farve)}">${r.maerker.map((t) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}
       <div style="${rgb(r.farve)}">
         <div class="panel">
           ${modes.length > 1 ? `<div class="label">Skalér efter</div><div class="chips">${modes.map((x) =>
@@ -533,6 +707,7 @@ class OpskriftCard extends HTMLElement {
           <li>${esc(t.tekst)}${t.billeder.length ? `<div class="thumbs">${t.billeder.map((b) =>
             `<button class="thumb" data-action="zoom" data-src="${esc(imgUrl(b))}" aria-label="Vis billedet i stor størrelse"><img src="${esc(imgUrl(b, true))}" alt="" loading="lazy"></button>`).join("")}</div>` : ""}</li>`).join("")}</ol></div>` : ""}
         ${r.noter ? `<div class="section"><div class="h">Noter</div><p class="notes">${esc(r.noter)}</p></div>` : ""}
+        ${this._madePanel(r)}
         ${updated ? `<div class="meta">Senest rettet ${esc(updated)}${r.opdateret_af ? ` af ${esc(r.opdateret_af)}` : ""}</div>` : ""}
       </div>`;
   }
@@ -545,11 +720,12 @@ class OpskriftCard extends HTMLElement {
       d.ingredienser = d.ingredienser.map((i) => ({ ...i, maengde: dkNum(i.maengde) }));
       d.trin = d.fremgang.map((t) => ({ tekst: t.tekst, billeder: [...t.billeder] }));
       if (!d.trin.length) d.trin.push({ tekst: "", billeder: [] });
+      d.maerker = [...(d.maerker || [])];
       return d;
     }
     return {
       navn: "", kategori: "", tid: "", personer: "4", ikon: "mdi:silverware-fork-knife",
-      farve: "orange", krydderistyrke: 100, billede: "", noter: "",
+      farve: "orange", krydderistyrke: 100, billede: "", noter: "", maerker: [],
       ingredienser: [{ navn: "" }],
       trin: [{ tekst: "", billeder: [] }],
     };
@@ -645,6 +821,71 @@ class OpskriftCard extends HTMLElement {
       </div>`).join("");
   }
 
+  _tagPick() {
+    const sel = new Set(this._draft.maerker);
+    const all = [...new Set([...TAG_SUGGESTIONS, ...this._allTags(), ...this._draft.maerker])];
+    return all.map((t) => `<button class="toggle ${sel.has(t) ? "on" : ""}" data-action="tag-toggle" data-tag="${esc(t)}" aria-pressed="${sel.has(t)}">
+      <ha-icon icon="${sel.has(t) ? "mdi:checkbox-marked" : "mdi:checkbox-blank-outline"}"></ha-icon>${esc(t)}</button>`).join("");
+  }
+
+  _addTag() {
+    const t = txt(this._newTag);
+    if (!t || !this._draft) return;
+    const existing = [...TAG_SUGGESTIONS, ...this._allTags()].find((x) => x.toLowerCase() === t.toLowerCase()) || cap(t);
+    if (!this._draft.maerker.includes(existing)) this._draft.maerker.push(existing);
+    this._newTag = "";
+    const input = this.shadowRoot.querySelector('input[data-input="newtag"]');
+    if (input) input.value = "";
+    this._rerender(".tag-pick", this._tagPick());
+  }
+
+  _familyEditor() {
+    const list = this._famDraft;
+    return `
+      <div class="editor" style="${rgb(this._config?.farve)}">
+        <div class="e-top">
+          <button class="icon-btn" data-action="fam-cancel" aria-label="Annullér"><ha-icon icon="mdi:close"></ha-icon></button>
+          <div class="title">Familie</div>
+          <button class="btn primary-btn" data-action="fam-save" ${this._saving ? "disabled" : ""}>Gem</button>
+        </div>
+        ${this._formError ? `<div class="e-error">${esc(this._formError)}</div>` : ""}
+        <div class="e-card">
+          <div class="e-h">Hvem bedømmer retterne?</div>
+          <div class="e-hint">Omdøber du en person, beholder vedkommende sine stjerner. Fjerner du en person, slettes vedkommendes stjerner, når du gemmer.</div>
+          <div class="fam-list">${list.map((p, idx) => `
+            <div class="fam-row">
+              <input type="text" data-fam="${idx}" value="${esc(p.navn)}" placeholder="Navn" aria-label="Navn" autocomplete="off">
+              <button class="btn quiet" data-action="fam-up" data-fam="${idx}" ${idx === 0 ? "disabled" : ""} aria-label="Flyt op"><ha-icon icon="mdi:arrow-up"></ha-icon></button>
+              <button class="btn danger" data-action="fam-del" data-fam="${idx}" aria-label="Fjern ${esc(p.navn || "person")}"><ha-icon icon="mdi:trash-can-outline"></ha-icon></button>
+            </div>`).join("")}</div>
+          <button class="btn add-row" data-action="fam-add"><ha-icon icon="mdi:plus"></ha-icon>Tilføj person</button>
+        </div>
+      </div>`;
+  }
+
+  async _saveFamily() {
+    const names = this._famDraft.map((p) => txt(p.navn)).filter(Boolean);
+    if (new Set(names.map((n) => n.toLowerCase())).size !== names.length) {
+      this._formError = "To personer har samme navn.";
+      return this._render();
+    }
+    this._saving = true;
+    this._formError = null;
+    this._render();
+    try {
+      const res = await this._hass.callWS({
+        type: "opskrifter/familie_gem",
+        familie: this._famDraft.filter((p) => txt(p.navn)).map((p) => (p.id ? { id: p.id, navn: txt(p.navn) } : { navn: txt(p.navn) })),
+      });
+      this._familie = res.familie;
+      this._famDraft = null;
+    } catch (err) {
+      this._formError = `Kunne ikke gemme: ${err?.message || err?.code || err}`;
+    }
+    this._saving = false;
+    this._render();
+  }
+
   _mainImage() {
     const d = this._draft;
     return d.billede
@@ -663,19 +904,30 @@ class OpskriftCard extends HTMLElement {
     const cats = [...new Set(this._recipes.map((r) => r.kategori).filter(Boolean))];
     const groups = [...new Set(["Ingredienser", "Serveres med", "Sauce", "Dressing", "Topping",
       ...this._recipes.flatMap((r) => r.ingredienser.map((i) => i.gruppe)).filter(Boolean)])];
-    const busy = this._saving ? "Gemmer…" : this._uploading ? "Uploader billede…" : "";
+    const busy = this._saving ? "Gemmer…" : this._aiBusy ? "Claude læser opskriften…" : this._uploading ? "Uploader billede…" : "";
     return `
       <div class="editor" style="${rgb(d.farve)}">
         <div class="e-top">
           <button class="icon-btn" data-action="cancel" aria-label="Annullér"><ha-icon icon="mdi:close"></ha-icon></button>
           <div class="title">${isNew ? "Ny opskrift" : "Redigér opskrift"}</div>
           <span class="busy">${esc(busy)}</span>
-          <button class="btn primary-btn" data-action="save" ${this._saving || this._uploading ? "disabled" : ""}>Gem</button>
+          <button class="btn primary-btn" data-action="save" ${this._saving || this._uploading || this._aiBusy ? "disabled" : ""}>Gem</button>
         </div>
         <datalist id="oc-cats">${cats.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
         <datalist id="oc-units">${UNITS.map((u) => `<option value="${esc(u)}">`).join("")}</datalist>
         <datalist id="oc-groups">${groups.map((g) => `<option value="${esc(g)}">`).join("")}</datalist>
         ${this._formError ? `<div class="e-error">${esc(this._formError)}</div>` : ""}
+        ${isNew ? `
+        <div class="e-card ai">
+          <div class="e-h"><ha-icon icon="mdi:text-recognition"></ha-icon>Start fra et billede</div>
+          <div class="e-hint">Tag et billede af en opskrift, så udfylder Claude felterne. Du kan rette alt, før du gemmer.</div>
+          <div class="ai-row">
+            ${this._aiBusy
+              ? `<span class="spinner" aria-hidden="true"></span><span class="busy">Claude læser opskriften. Det tager typisk 10–40 sekunder.</span>`
+              : `<label class="btn primary-btn upload"><ha-icon icon="mdi:camera-outline"></ha-icon>Tag eller vælg billede
+                  <input type="file" accept="image/*" data-upload="ai"></label>`}
+          </div>
+        </div>` : ""}
 
         <div class="e-card">
           <div class="e-h">Grundoplysninger</div>
@@ -692,6 +944,16 @@ class OpskriftCard extends HTMLElement {
             ${this._field("Ikon", "ikon", d.ikon, { placeholder: "mdi:food" })}
             <label class="fld"><span>Farve</span><select data-f="farve">${Object.entries(COLORS).map(([k, [l]]) =>
               `<option value="${k}" ${k === d.farve ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
+          </div>
+        </div>
+
+        <div class="e-card">
+          <div class="e-h">Mærker</div>
+          <div class="e-hint">Bruges til søgning og filtre, fx kødtype, grøntsager eller spicy.</div>
+          <div class="tag-pick">${this._tagPick()}</div>
+          <div class="add-tag">
+            <input type="text" data-input="newtag" placeholder="Nyt mærke" value="${esc(this._newTag)}" autocomplete="off" aria-label="Nyt mærke">
+            <button class="btn" data-action="tag-add"><ha-icon icon="mdi:plus"></ha-icon>Tilføj</button>
           </div>
         </div>
 
@@ -777,6 +1039,7 @@ class OpskriftCard extends HTMLElement {
       if (i.trin > 0) o.trin = Number(i.trin);
       r.ingredienser.push(o);
     });
+    r.maerker = [...new Set((d.maerker || []).map(txt).filter(Boolean))];
     r.fremgang = d.trin
       .map((t) => ({ tekst: txt(t.tekst), billeder: t.billeder || [] }))
       .filter((t) => t.tekst || t.billeder.length);
@@ -807,14 +1070,49 @@ class OpskriftCard extends HTMLElement {
       for (const f of files) {
         const id = await this._upload(f);
         if (!this._draft) break;
+        if (target === "ai") {
+          this._uploading -= 1;
+          this._aiBusy = true;
+          this._render();
+          try {
+            await this._readFromImage(id);
+          } finally {
+            this._aiBusy = false;
+            this._uploading += 1;
+          }
+          break;
+        }
         if (target === "main") this._draft.billede = id;
         else this._draft.trin[idx]?.billeder.push(id);
       }
     } catch (err) {
-      this._formError = `Billedet kunne ikke uploades: ${err.message}`;
+      this._formError = target === "ai"
+        ? `Opskriften kunne ikke aflæses: ${err?.message || err?.code || err}`
+        : `Billedet kunne ikke uploades: ${err?.message || err}`;
     }
     this._uploading -= 1;
     if (this._draft) this._render();
+  }
+
+  async _readFromImage(imageId) {
+    const res = await this._hass.callWS({ type: "opskrifter/fra_billede", billede_id: imageId });
+    const r = normalize([{ ...res.opskrift, id: "ny" }])[0];
+    const d = this._draft;
+    if (!d) return;
+    Object.assign(d, {
+      navn: r.navn || d.navn,
+      kategori: r.kategori || d.kategori,
+      tid: r.tid || d.tid,
+      personer: r.personer ? dkNum(r.personer) : d.personer,
+      noter: r.noter || d.noter,
+      maerker: [...new Set([...(d.maerker || []), ...r.maerker])],
+      ingredienser: r.ingredienser.length ? r.ingredienser.map((i) => ({ ...i, maengde: dkNum(i.maengde) })) : d.ingredienser,
+      trin: r.fremgang.length ? r.fremgang.map((t) => ({ tekst: t.tekst, billeder: [] })) : d.trin,
+    });
+    if (r.billede) d.billede = r.billede;
+    if (r.ingredienser.some((i) => i.krydderi) && !d.krydderistyrke) d.krydderistyrke = 100;
+    this._openIng = null;
+    this._formError = null;
   }
 
   async _save() {
@@ -848,7 +1146,7 @@ class OpskriftCard extends HTMLElement {
       return this._render();
     }
     try {
-      await this._hass.callWS({ type: "opskrifter/delete", id: this._draft.id });
+      await this._hass.callWS({ type: "opskrifter/delete", opskrift_id: this._draft.id });
       this._recipes = this._recipes.filter((r) => r.id !== this._draft.id);
       this._draft = null;
       this._setOpen(null, false);
@@ -893,7 +1191,39 @@ class OpskriftCard extends HTMLElement {
     if (a === "close-lightbox") { this._lightbox = null; return this._render(); }
     if (a === "zoom") { this._lightbox = el.dataset.src; return this._render(); }
 
+    // familie
+    if (a === "settings") {
+      this._famDraft = this._familie.map((p) => ({ ...p }));
+      if (!this._famDraft.length) this._famDraft.push({ navn: "" });
+      this._formError = null;
+      return this._render();
+    }
+    if (this._famDraft) {
+      const fi = Number(el.dataset.fam);
+      const f = this._famDraft;
+      switch (a) {
+        case "fam-cancel": this._famDraft = null; this._formError = null; return this._render();
+        case "fam-save": return this._saveFamily();
+        case "fam-add":
+          f.push({ navn: "" });
+          this._render();
+          this.shadowRoot.querySelector(`input[data-fam="${f.length - 1}"]`)?.focus();
+          return;
+        case "fam-del": f.splice(fi, 1); return this._render();
+        case "fam-up":
+          if (fi > 0) [f[fi - 1], f[fi]] = [f[fi], f[fi - 1]];
+          return this._render();
+        default: return;
+      }
+    }
+
     // liste og navigation
+    if (a === "tag") {
+      const t = el.dataset.value;
+      if (this._tags.has(t)) this._tags.delete(t); else this._tags.add(t);
+      return this._render();
+    }
+    if (a === "tags-clear") { this._tags.clear(); return this._render(); }
     if (a === "open") return this._setOpen(el.dataset.id);
     if (a === "back") return this._setOpen(null);
     if (a === "cat") {
@@ -919,6 +1249,12 @@ class OpskriftCard extends HTMLElement {
         case "save": return this._save();
         case "delete": return this._delete();
         case "main-del": d.billede = ""; return this._rerender(".mainimg", this._mainImage());
+        case "tag-toggle": {
+          const t = el.dataset.tag;
+          d.maerker = d.maerker.includes(t) ? d.maerker.filter((x) => x !== t) : [...d.maerker, t];
+          return this._rerender(".tag-pick", this._tagPick());
+        }
+        case "tag-add": return this._addTag();
         case "ing-toggle":
           this._openIng = this._openIng === idx ? null : idx;
           return this._rerender(".ing-list", this._ingEditRows());
@@ -977,6 +1313,18 @@ class OpskriftCard extends HTMLElement {
     const r = this._current();
     if (!r) return;
     if (a === "print") return this._print(r);
+    if (a === "hist") {
+      e.preventDefault();
+      this._histOpen = !this._histOpen;
+      return this._render();
+    }
+    if (a === "cooked") return this._ws({ type: "opskrifter/lavet", opskrift_id: r.id, dato: el.dataset.dato });
+    if (a === "cooked-del") return this._ws({ type: "opskrifter/lavet_slet", opskrift_id: r.id, dato: el.dataset.dato });
+    if (a === "rate") {
+      const cur = Number(r.vurderinger[el.dataset.person]) || 0;
+      const st = Number(el.dataset.stars);
+      return this._ws({ type: "opskrifter/bedoem", opskrift_id: r.id, person: el.dataset.person, stjerner: cur === st ? 0 : st });
+    }
     const s = this._getState(r);
     const m = this._modes(r).find((x) => x.id === s.mode);
     if (a === "mode") {
@@ -1008,7 +1356,15 @@ class OpskriftCard extends HTMLElement {
       if (list) list.innerHTML = this._rows();
       return;
     }
+    if (this._famDraft && t.dataset.fam !== undefined && t.tagName === "INPUT") {
+      this._famDraft[Number(t.dataset.fam)].navn = t.value;
+      return;
+    }
     if (!this._draft) return;
+    if (t.dataset.input === "newtag") {
+      this._newTag = t.value;
+      return;
+    }
     if (t.dataset.f) {
       this._draft[t.dataset.f] = t.value;
     } else if (t.dataset.ing !== undefined) {
@@ -1029,6 +1385,16 @@ class OpskriftCard extends HTMLElement {
     if (this._draft && t.dataset.f === "farve") {
       this._draft.farve = t.value;
       this.shadowRoot.querySelector(".editor")?.setAttribute("style", rgb(t.value));
+      return;
+    }
+    if (t.dataset.input === "sort") {
+      this._sort = t.value;
+      try { localStorage.setItem(this._key + ":sort", this._sort); } catch (err) { /* ignore */ }
+      return this._render();
+    }
+    if (t.dataset.input === "cooked-date") {
+      const r = this._current();
+      if (r && t.value) this._ws({ type: "opskrifter/lavet", opskrift_id: r.id, dato: t.value });
       return;
     }
     if (t.dataset.input !== "value") return;
@@ -1099,7 +1465,7 @@ if (!customElements.get("opskrift-card")) {
   window.customCards.push({
     type: "opskrift-card",
     name: "Opskrift-kort",
-    description: "Opskriftssamling med billeder, redigering og skalering efter personer, nøgleingrediens og krydderistyrke",
+    description: "Opskriftssamling med billeder, bedømmelser, historik, mærker og skalering",
   });
   console.info(`%c OPSKRIFT-CARD %c v${OC_VERSION} `,
     "color:#fff;background:#ff9800;font-weight:700;border-radius:3px 0 0 3px",
