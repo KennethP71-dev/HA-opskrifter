@@ -4,10 +4,11 @@
   "codeowners": ["@KennethP71-dev"],
   "config_flow": true,
   "dependencies": ["http", "frontend", "websocket_api"],
+  "after_dependencies": ["lovelace"],
   "documentation": "https://github.com/KennethP71-dev/HA-opskrifter",
   "integration_type": "service",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/KennethP71-dev/HA-opskrifter/issues",
   "requirements": [],
-  "version": "1.1.0"
+  "version": "1.1.1"
 }
