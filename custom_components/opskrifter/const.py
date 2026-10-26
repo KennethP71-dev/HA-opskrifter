@@ -1,7 +1,7 @@
 """Konstanter for Opskrifter."""
 
 DOMAIN = "opskrifter"
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 
 STORAGE_KEY = "opskrifter.data"
 STORAGE_VERSION = 1
