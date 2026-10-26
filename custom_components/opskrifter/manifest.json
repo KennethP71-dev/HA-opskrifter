@@ -1,0 +1,13 @@
+{
+  "domain": "opskrifter",
+  "name": "Opskrifter",
+  "codeowners": ["@KennethP71-dev"],
+  "config_flow": true,
+  "dependencies": ["http", "frontend", "websocket_api"],
+  "documentation": "https://github.com/KennethP71-dev/HA-opskrifter",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/KennethP71-dev/HA-opskrifter/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}
