@@ -60,6 +60,26 @@ def save_image(folder: Path, raw: bytes) -> str:
     return image_id
 
 
+def crop_image(folder: Path, image_id: str, box: dict[str, Any]) -> str | None:
+    """Klipper et udsnit (brøkdele 0-1) ud af et gemt billede og gemmer det som nyt billede."""
+    from PIL import Image  # pylint: disable=import-outside-toplevel
+
+    try:
+        x, y, w, h = (float(box[k]) for k in ("x", "y", "b", "h"))
+    except (KeyError, TypeError, ValueError):
+        return None
+    x, y = max(0.0, min(x, 1.0)), max(0.0, min(y, 1.0))
+    w, h = min(w, 1.0 - x), min(h, 1.0 - y)
+    if w < 0.12 or h < 0.08:
+        return None
+    with Image.open(folder / f"{image_id}.jpg") as img:
+        width, height = img.size
+        part = img.crop((int(x * width), int(y * height), int((x + w) * width), int((y + h) * height)))
+        buffer = io.BytesIO()
+        part.save(buffer, "JPEG", quality=92)
+    return save_image(folder, buffer.getvalue())
+
+
 def delete_images(folder: Path, ids: set[str]) -> None:
     for image_id in ids:
         if not ID_RE.fullmatch(image_id):
