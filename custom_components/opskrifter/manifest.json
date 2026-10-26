@@ -3,12 +3,12 @@
   "name": "Opskrifter",
   "codeowners": ["@KennethP71-dev"],
   "config_flow": true,
-  "dependencies": ["http", "frontend", "websocket_api"],
-  "after_dependencies": ["lovelace"],
+  "dependencies": ["http", "frontend", "websocket_api", "media_source"],
+  "after_dependencies": ["lovelace", "ai_task"],
   "documentation": "https://github.com/KennethP71-dev/HA-opskrifter",
   "integration_type": "service",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/KennethP71-dev/HA-opskrifter/issues",
   "requirements": [],
-  "version": "1.1.1"
+  "version": "1.2.0"
 }
