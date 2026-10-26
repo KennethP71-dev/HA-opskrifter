@@ -11,6 +11,7 @@ from homeassistant.helpers import config_validation as cv
 
 from . import api
 from .const import DATA_REGISTERED, DOMAIN, URL_BASE, VERSION
+from .images import ImageServeView, ImageUploadView
 from .store import OpskriftStore
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -23,6 +24,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if not hass.data.get(DATA_REGISTERED):
         api.async_register(hass)
+        hass.http.register_view(ImageUploadView(hass))
+        hass.http.register_view(ImageServeView(hass))
         await hass.http.async_register_static_paths(
             [StaticPathConfig(URL_BASE, str(Path(__file__).parent / "frontend"), False)]
         )
