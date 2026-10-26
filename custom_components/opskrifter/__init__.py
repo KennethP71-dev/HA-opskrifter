@@ -13,6 +13,7 @@ from .const import DATA_REGISTERED, DOMAIN, URL_BASE
 from .frontend_reg import async_register_card
 from .images import ImageServeView, ImageUploadView
 from .store import OpskriftStore
+from .udskrift import PrintCreateView, PrintServeView
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -26,6 +27,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         api.async_register(hass)
         hass.http.register_view(ImageUploadView(hass))
         hass.http.register_view(ImageServeView(hass))
+        hass.http.register_view(PrintCreateView(hass))
+        hass.http.register_view(PrintServeView(hass))
         await hass.http.async_register_static_paths(
             [StaticPathConfig(URL_BASE, str(Path(__file__).parent / "frontend"), False)]
         )
