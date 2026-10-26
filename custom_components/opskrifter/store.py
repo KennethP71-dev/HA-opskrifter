@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import logging
 import uuid
 from typing import Any
 
@@ -11,6 +12,9 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import EKSEMPLER, SIGNAL_UPDATED, STORAGE_KEY, STORAGE_VERSION
+from .images import delete_images, delete_orphans, image_dir, image_ids
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class OpskriftStore:
@@ -35,6 +39,17 @@ class OpskriftStore:
         self._recipes = {
             r["id"]: r for r in data.get("opskrifter", []) if isinstance(r, dict) and r.get("id")
         }
+        removed = await self.hass.async_add_executor_job(
+            delete_orphans, image_dir(self.hass), self._all_image_ids()
+        )
+        if removed:
+            _LOGGER.debug("Slettede %s ubrugte billedfiler", removed)
+
+    def _all_image_ids(self) -> set[str]:
+        ids: set[str] = set()
+        for recipe in self._recipes.values():
+            ids |= image_ids(recipe)
+        return ids
 
     def _insert(self, recipe: dict[str, Any], user: str | None) -> dict[str, Any]:
         now = dt_util.utcnow().isoformat()
@@ -50,15 +65,24 @@ class OpskriftStore:
         self._recipes[recipe["id"]] = recipe
         return recipe
 
+    async def _async_delete_files(self, ids: set[str]) -> None:
+        if ids:
+            await self.hass.async_add_executor_job(delete_images, image_dir(self.hass), ids)
+
     async def async_upsert(self, recipe: dict[str, Any], user: str | None = None) -> dict[str, Any]:
+        old = self._recipes.get(recipe.get("id") or "")
+        old_ids = image_ids(old) if old else set()
         saved = self._insert(recipe, user)
         await self._async_save()
+        await self._async_delete_files(old_ids - image_ids(saved))
         return saved
 
     async def async_delete(self, recipe_id: str) -> bool:
-        if self._recipes.pop(recipe_id, None) is None:
+        recipe = self._recipes.pop(recipe_id, None)
+        if recipe is None:
             return False
         await self._async_save()
+        await self._async_delete_files(image_ids(recipe))
         return True
 
     async def async_import(self, recipes: list[dict[str, Any]], user: str | None = None) -> int:
