@@ -6,10 +6,10 @@ En opskriftssamling, der bor i Home Assistant. Du kan oprette, rette og slette o
 - Ændringer vises med det samme på alle åbne dashboards og enheder.
 - Kortet indlæses automatisk af integrationen. Du skal ikke oprette en ressource.
 - Første gang integrationen sættes op, lægges "Nem smørkylling" ind som eksempel.
-- Familiemedlemmer giver 1–5 stjerner pr. opskrift. Familien redigeres i kortet under Familie.
+- Familiemedlemmer giver 1–5 stjerner pr. opskrift. Familien og registret over enheder redigeres i kortet under Indstillinger.
 - Historik over hvornår retten er lavet (I dag, I går eller valgfri dato). Listen kan sorteres efter navn, senest lavet, længst siden, mest lavet og bedst bedømt.
 - Mærker som kødtype, grøntsager eller spicy bruges til søgning og filtre.
-- **Start fra et billede:** Tag et billede af en opskrift, så aflæser AI'en den og udfylder editoren. Kræver en AI Task-enhed med understøttelse af vedhæftede filer, fx Anthropic (Claude), valgt som standard under Indstillinger → System → AI.
+- **Start fra et billede:** Tag et eller flere billeder af en opskrift (fx forside og bagside), så aflæser AI'en den og udfylder editoren. Kræver en AI Task-enhed med understøttelse af vedhæftede filer, fx Anthropic (Claude), valgt som standard under Indstillinger → System → AI.
 - Billeder (hovedbillede og billeder pr. trin) uploades direkte fra editoren. De skaleres ned og gemmes i `/config/opskrifter/billeder`, som også kommer med i backups. Ubrugte billeder ryddes op automatisk.
 
 ## Installation via HACS
@@ -63,7 +63,8 @@ Mængder afrundes til noget, der kan måles op: skeer og dl til ¼, gram til 5/1
 | `opskrifter/lavet_slet` | Fjerner en dato fra historikken (`opskrift_id`, `dato`) |
 | `opskrifter/bedoem` | Giver stjerner (`opskrift_id`, `person`, `stjerner` 0–5, hvor 0 fjerner) |
 | `opskrifter/familie_gem` | Gemmer familien (`familie`: liste med `navn` og evt. `id`) |
-| `opskrifter/fra_billede` | Aflæser en opskrift fra et uploadet billede (`billede_id`) og returnerer et udkast. Gemmer intet |
+| `opskrifter/fra_billede` | Aflæser en opskrift fra et eller flere uploadede billeder (`billede_ids`) og returnerer et udkast. Gemmer intet |
+| `opskrifter/enheder_gem` | Gemmer registret over enheder (`enheder`: liste) |
 
 ## Krav
 
