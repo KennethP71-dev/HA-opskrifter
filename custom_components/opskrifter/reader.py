@@ -10,7 +10,7 @@ from homeassistant.exceptions import HomeAssistantError
 from .const import DOMAIN
 from .images import crop_image, image_dir
 
-PROMPT = """Du får et billede af en opskrift. Aflæs den og svar KUN med ét JSON-objekt, uden forklaring og uden markdown, med disse felter:
+PROMPT = """Du får et eller flere billeder af den samme opskrift, fx forside og bagside eller flere sider. Saml dem til én opskrift i den rækkefølge, de står. Aflæs den og svar KUN med ét JSON-objekt, uden forklaring og uden markdown, med disse felter:
 - "navn": string
 - "personer": tal eller null
 - "tid": string eller null, fx "20 min"
@@ -19,12 +19,12 @@ PROMPT = """Du får et billede af en opskrift. Aflæs den og svar KUN med ét JS
 - "ingredienser": liste af objekter med "maengde" (tal eller null), "enhed" (string eller null), "navn" (string), "note" (string eller null), "gruppe" (string eller null), "krydderi" (true/false), "noegle" (true/false)
 - "fremgang": liste af strings, ét trin pr. element, uden nummerering
 - "noter": string eller null
-- "billede_udsnit": hvis billedet indeholder et foto af den færdige ret, så {"x": .., "y": .., "b": .., "h": ..} som brøkdele mellem 0 og 1 af billedets bredde og højde (x og y er øverste venstre hjørne). Ellers null.
+- "billede_udsnit": hvis et af billederne indeholder et foto af den færdige ret, så {"billede": nummeret på billedet (0 for det første), "x": .., "y": .., "b": .., "h": ..} hvor x, y, b og h er brøkdele mellem 0 og 1 af det billedes bredde og højde (x og y er øverste venstre hjørne). Vælg det bedste foto. Ellers null.
 
 Regler:
 - Skriv på samme sprog som opskriften, normalt dansk.
 - Mængder som tal: ½ = 0.5, 1½ = 1.5, ¼ = 0.25.
-- Enheder som g, kg, ml, dl, l, tsk., spsk., fed, nip, stk. Uden enhed (fx "2 løg") er enhed null.
+- Brug disse enheder, stavet præcis sådan: {enheder}. Findes enheden ikke på listen, så brug den, der står i opskriften. Uden enhed (fx "2 løg") er enhed null.
 - Udelad overstregede ingredienser og trin.
 - "krydderi" er true for tørre krydderier, krydderiblandinger, salt og peber.
 - "noegle" er true for højst én ingrediens: hovedingrediensen, typisk kød eller fisk.
@@ -99,19 +99,25 @@ def _to_recipe(raw: dict[str, Any]) -> dict[str, Any]:
     return recipe
 
 
-async def async_read_recipe(hass: HomeAssistant, image_id: str) -> dict[str, Any]:
+async def async_read_recipe(
+    hass: HomeAssistant, image_ids: list[str], units: list[str]
+) -> dict[str, Any]:
+    instructions = PROMPT.replace(
+        "{enheder}", ", ".join(units) or "g, kg, ml, dl, l, tsk., spsk., fed, nip, stk."
+    )
     try:
         response = await hass.services.async_call(
             "ai_task",
             "generate_data",
             {
                 "task_name": "opskrift fra billede",
-                "instructions": PROMPT,
+                "instructions": instructions,
                 "attachments": [
                     {
                         "media_content_id": f"media-source://{DOMAIN}/{image_id}",
                         "media_content_type": "image/jpeg",
                     }
+                    for image_id in image_ids
                 ],
             },
             blocking=True,
@@ -124,7 +130,12 @@ async def async_read_recipe(hass: HomeAssistant, image_id: str) -> dict[str, Any
     recipe = _to_recipe(raw)
     box = raw.get("billede_udsnit")
     if isinstance(box, dict):
-        crop_id = await hass.async_add_executor_job(crop_image, image_dir(hass), image_id, box)
+        try:
+            index = int(box.get("billede") or 0)
+        except (TypeError, ValueError):
+            index = 0
+        source = image_ids[index] if 0 <= index < len(image_ids) else image_ids[0]
+        crop_id = await hass.async_add_executor_job(crop_image, image_dir(hass), source, box)
         if crop_id:
             recipe["billede"] = crop_id
     return recipe
