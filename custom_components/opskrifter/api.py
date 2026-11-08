@@ -70,15 +70,15 @@ def _user_name(connection: websocket_api.ActiveConnection) -> str | None:
 def async_register(hass: HomeAssistant) -> None:
     for handler in (
         ws_subscribe, ws_list, ws_save, ws_delete, ws_import,
-        ws_cooked, ws_cooked_delete, ws_rate, ws_family, ws_from_image,
+        ws_cooked, ws_cooked_delete, ws_rate, ws_family, ws_from_image, ws_units,
     ):
         websocket_api.async_register_command(hass, handler)
 
 
 def _payload(store: Any) -> dict[str, Any]:
     if store is None:
-        return {"opskrifter": [], "familie": []}
-    return {"opskrifter": store.recipes, "familie": store.family}
+        return {"opskrifter": [], "familie": [], "enheder": []}
+    return {"opskrifter": store.recipes, "familie": store.family, "enheder": store.units}
 
 
 def _get_store(hass: HomeAssistant, connection, msg) -> Any:
@@ -239,14 +239,39 @@ async def ws_family(hass: HomeAssistant, connection, msg: dict[str, Any]) -> Non
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): "opskrifter/fra_billede", vol.Required("billede_id"): cv.string}
+    {
+        vol.Required("type"): "opskrifter/fra_billede",
+        vol.Optional("billede_id"): cv.string,
+        vol.Optional("billede_ids"): vol.All([cv.string], vol.Length(min=1, max=8)),
+    }
 )
 @websocket_api.async_response
 async def ws_from_image(hass: HomeAssistant, connection, msg: dict[str, Any]) -> None:
     """Aflæser en opskrift fra et uploadet billede. Gemmer ikke noget."""
+    ids = list(msg.get("billede_ids") or [])
+    if msg.get("billede_id"):
+        ids.insert(0, msg["billede_id"])
+    if not ids:
+        connection.send_error(msg["id"], "invalid_format", "Ingen billeder")
+        return
+    store = hass.data.get(DOMAIN)
     try:
-        recipe = await async_read_recipe(hass, msg["billede_id"])
+        recipe = await async_read_recipe(hass, ids, store.units if store else [])
     except Exception as err:  # noqa: BLE001
         connection.send_error(msg["id"], "read_failed", str(err))
         return
     connection.send_result(msg["id"], {"opskrift": recipe})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "opskrifter/enheder_gem",
+        vol.Required("enheder"): [vol.All(cv.string, vol.Length(max=20))],
+    }
+)
+@websocket_api.async_response
+async def ws_units(hass: HomeAssistant, connection, msg: dict[str, Any]) -> None:
+    if (store := _get_store(hass, connection, msg)) is None:
+        return
+    units = await store.async_set_units(msg["enheder"])
+    connection.send_result(msg["id"], {"enheder": units})
