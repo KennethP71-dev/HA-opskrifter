@@ -11,7 +11,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .const import EKSEMPLER, SIGNAL_UPDATED, STORAGE_KEY, STORAGE_VERSION
+from .const import DEFAULT_UNITS, EKSEMPLER, SIGNAL_UPDATED, STORAGE_KEY, STORAGE_VERSION
 from .images import delete_images, delete_orphans, image_dir, image_ids
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,6 +25,7 @@ class OpskriftStore:
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._recipes: dict[str, dict[str, Any]] = {}
         self._family: list[dict[str, str]] = []
+        self._units: list[str] = list(DEFAULT_UNITS)
 
     @property
     def recipes(self) -> list[dict[str, Any]]:
@@ -33,6 +34,10 @@ class OpskriftStore:
     @property
     def family(self) -> list[dict[str, str]]:
         return list(self._family)
+
+    @property
+    def units(self) -> list[str]:
+        return list(self._units)
 
     async def async_load(self) -> None:
         data = await self._store.async_load()
@@ -49,6 +54,9 @@ class OpskriftStore:
             for p in data.get("familie", [])
             if isinstance(p, dict) and p.get("id") and p.get("navn")
         ]
+        units = data.get("enheder")
+        if isinstance(units, list) and units:
+            self._units = [str(u) for u in units if str(u).strip()]
         removed = await self.hass.async_add_executor_job(
             delete_orphans, image_dir(self.hass), self._all_image_ids()
         )
@@ -150,6 +158,18 @@ class OpskriftStore:
         await self._async_save()
         return self.family
 
+    async def async_set_units(self, units: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for unit in units:
+            text = str(unit).strip()
+            if text and text.lower() not in seen:
+                seen.add(text.lower())
+                cleaned.append(text)
+        self._units = cleaned
+        await self._async_save()
+        return self.units
+
     async def async_import(self, recipes: list[dict[str, Any]], user: str | None = None) -> int:
         """Importerer opskrifter. Springer over hvis navnet allerede findes."""
         names = {r["navn"].strip().lower() for r in self._recipes.values()}
@@ -168,6 +188,10 @@ class OpskriftStore:
 
     async def _async_save(self) -> None:
         await self._store.async_save(
-            {"opskrifter": list(self._recipes.values()), "familie": self._family}
+            {
+                "opskrifter": list(self._recipes.values()),
+                "familie": self._family,
+                "enheder": self._units,
+            }
         )
         async_dispatcher_send(self.hass, SIGNAL_UPDATED)
