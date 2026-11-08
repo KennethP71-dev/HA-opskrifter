@@ -1,7 +1,7 @@
 """Konstanter for Opskrifter."""
 
 DOMAIN = "opskrifter"
-VERSION = "1.2.1"
+VERSION = "1.3.0"
 
 STORAGE_KEY = "opskrifter.data"
 STORAGE_VERSION = 1
@@ -62,6 +62,11 @@ EKSEMPLER = [
         ],
         "noter": "Bukkehornsfrø er udeladt.\nVed store portioner: steg kyllingen i omgange, og regn med lidt længere tid i trin 2, 4 og 5.",
     }
+]
+
+DEFAULT_UNITS = [
+    "g", "kg", "ml", "dl", "l", "tsk.", "spsk.", "knsp.", "fed", "nip", "stk.",
+    "dåse", "bdt.", "skiver", "pk.",
 ]
 
 IMAGE_DIR = "opskrifter/billeder"
