@@ -2,7 +2,7 @@
  * Opskrift-card – frontend til integrationen Opskrifter
  * Indlæses automatisk af integrationen. Kort-type: custom:opskrift-card
  */
-const OC_VERSION = "1.2.1";
+const OC_VERSION = "1.3.0";
 
 const COLORS = {
   red: ["Rød", "244, 67, 54"], pink: ["Pink", "233, 30, 99"], purple: ["Lilla", "156, 39, 176"],
@@ -11,7 +11,7 @@ const COLORS = {
   amber: ["Rav", "255, 193, 7"], orange: ["Orange", "255, 152, 0"], "deep-orange": ["Dyb orange", "255, 87, 34"],
   brown: ["Brun", "121, 85, 72"], grey: ["Grå", "158, 158, 158"],
 };
-const UNITS = ["g", "kg", "ml", "dl", "l", "tsk.", "spsk.", "fed", "nip", "stk.", "dåse", "bdt.", "skiver"];
+const UNITS = ["g", "kg", "ml", "dl", "l", "tsk.", "spsk.", "knsp.", "fed", "nip", "stk.", "dåse", "bdt.", "skiver", "pk."];
 const IMAGE_ID = /^[0-9a-f]{32}$/;
 const TAG_SUGGESTIONS = ["Kylling", "Oksekød", "Svinekød", "Lam", "Fisk", "Skaldyr", "Vegetar", "Grøntsager",
   "Pasta", "Ris", "Suppe", "Salat", "Spicy", "Hurtig", "Børnevenlig", "Fest", "Dessert"];
@@ -220,7 +220,7 @@ ha-card.editing{--ha-card-background:#eef0f3;background:#eef0f3;color:#1c1f24;pa
 .fld input::placeholder,.fld textarea::placeholder{color:#9aa1ab}
 .fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--e-accent);box-shadow:0 0 0 3px var(--e-tint)}
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.cols3{display:grid;grid-template-columns:84px 96px 1fr;gap:10px}
+.cols3{display:grid;grid-template-columns:84px 112px 1fr;gap:10px}
 .e-hint{font-size:12px;color:var(--e-muted);margin:-4px 0 10px;line-height:1.4}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:0 14px;border-radius:10px;border:1px solid var(--e-border);font:inherit;font-size:14px;font-weight:600;cursor:pointer;background:#fff;color:var(--e-text);--mdc-icon-size:18px;white-space:nowrap}
 .btn:hover{background:var(--e-sub)}
@@ -272,18 +272,24 @@ ha-card.editing{--ha-card-background:#eef0f3;background:#eef0f3;color:#1c1f24;pa
 .e-bottom .right{display:flex;gap:8px;margin-left:auto}
 .busy{font-size:13px;color:var(--e-muted)}
 .tag-pick{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.unit-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.unit-chip{display:inline-flex;align-items:center;gap:2px;height:32px;padding:0 4px 0 12px;border-radius:999px;border:1px solid var(--e-border);background:#fff;font-size:14px;font-weight:600}
+.unit-chip button{width:26px;height:26px;border:none;background:none;border-radius:50%;cursor:pointer;color:var(--e-muted);display:flex;align-items:center;justify-content:center;--mdc-icon-size:16px;padding:0}
+.unit-chip button:hover{background:var(--e-sub);color:#b3261e}
+.ai .e-thumbs{margin:0 0 10px}
 .e-card.ai{border-color:var(--e-accent);background:linear-gradient(0deg,var(--e-tint),var(--e-tint)),#fff}
 .ai-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .spinner{width:18px;height:18px;border-radius:50%;border:2px solid var(--e-tint);border-top-color:var(--e-accent);animation:spin 0.9s linear infinite;flex:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spinner{animation-duration:3s}}
 .add-tag,.fam-row{display:flex;gap:8px;align-items:center}
+.fld .add-tag .btn{height:42px;padding:0 10px}
 .fam-row{margin:0 0 8px}
 .add-tag input,.fam-row input{flex:1;box-sizing:border-box;min-width:0;border:1px solid var(--e-border);border-radius:10px;padding:9px 11px;font:inherit;font-size:15px;background:#fff;color:var(--e-text);outline:none}
 .add-tag input:focus,.fam-row input:focus{border-color:var(--e-accent);box-shadow:0 0 0 3px var(--e-tint)}
 @media (max-width:520px){
   .cols{grid-template-columns:1fr}
-  .cols3{grid-template-columns:76px 88px 1fr}
+  .cols3{grid-template-columns:72px 104px 1fr}
   .ing-body{padding-left:12px}
 }
 `;
@@ -333,6 +339,11 @@ class OpskriftCard extends HTMLElement {
     this._aiBusy = false;
     this._printLink = null;
     this._printBusy = false;
+    this._units = [...UNITS];
+    this._unitDraft = null;
+    this._unitPrompt = null;
+    this._newUnit = "";
+    this._aiImgs = [];
     const root = this.shadowRoot;
     root.addEventListener("click", (e) => this._onClick(e));
     root.addEventListener("input", (e) => this._onInput(e));
@@ -341,6 +352,16 @@ class OpskriftCard extends HTMLElement {
       if (e.key === "Escape" && this._lightbox) {
         this._lightbox = null;
         this._render();
+        return;
+      }
+      if (e.key === "Enter" && e.target.dataset?.input === "newunit") {
+        e.preventDefault();
+        this._addUnitDraft();
+        return;
+      }
+      if (e.key === "Enter" && e.target.dataset?.input === "newunit-ing") {
+        e.preventDefault();
+        this._addUnitForIngredient(Number(e.target.dataset.unitIng));
         return;
       }
       if (e.key === "Enter" && e.target.dataset?.input === "newtag") {
@@ -417,6 +438,7 @@ class OpskriftCard extends HTMLElement {
   _onData(data) {
     this._recipes = normalize(data?.opskrifter);
     this._familie = Array.isArray(data?.familie) ? data.familie : [];
+    if (Array.isArray(data?.enheder) && data.enheder.length) this._units = data.enheder;
     this._status = "ok";
     this._error = null;
     if (this._draft || this._famDraft) return; // forstyr ikke en igangværende redigering
@@ -570,7 +592,7 @@ class OpskriftCard extends HTMLElement {
           <div class="secondary">${sub}</div>
         </div>
         ${!this._readonly && this._status === "ok" ? `
-          <button class="icon-btn" data-action="settings" aria-label="Familie"><ha-icon icon="mdi:account-group-outline"></ha-icon></button>
+          <button class="icon-btn" data-action="settings" aria-label="Indstillinger"><ha-icon icon="mdi:cog-outline"></ha-icon></button>
           <button class="icon-btn" data-action="new" aria-label="Ny opskrift"><ha-icon icon="mdi:plus"></ha-icon></button>` : ""}
       </div>
       ${this._error ? `<div class="error">${esc(this._error)}</div>` : ""}
@@ -649,7 +671,7 @@ class OpskriftCard extends HTMLElement {
             const v = Number(r.vurderinger[p.id]) || 0;
             return `<div class="rate"><span class="who">${esc(p.navn)}</span><span class="stars">${[1, 2, 3, 4, 5].map((st) =>
               `<button class="star ${st <= v ? "on" : ""}" data-action="rate" data-person="${esc(p.id)}" data-stars="${st}" aria-label="${esc(p.navn)}: ${st} ${st === 1 ? "stjerne" : "stjerner"}" aria-pressed="${st <= v}"><ha-icon icon="${st <= v ? "mdi:star" : "mdi:star-outline"}"></ha-icon></button>`).join("")}</span></div>`;
-          }).join("") : `<div class="secondary">Tilføj familiemedlemmer under <button class="link" data-action="settings">Familie</button> for at give stjerner.</div>`}
+          }).join("") : `<div class="secondary">Tilføj familiemedlemmer under <button class="link" data-action="settings">Indstillinger</button> for at give stjerner.</div>`}
         </div>`;
   }
 
@@ -768,6 +790,36 @@ class OpskriftCard extends HTMLElement {
       <ha-icon icon="${this._openIng === idx ? "mdi:chevron-up" : "mdi:chevron-down"}"></ha-icon>`;
   }
 
+  _unitSelect(i, idx) {
+    if (this._unitPrompt === idx) {
+      return `<label class="fld"><span>Ny enhed</span><div class="add-tag">
+        <input type="text" data-input="newunit-ing" data-unit-ing="${idx}" placeholder="Fx kop" autocomplete="off" aria-label="Ny enhed">
+        <button class="btn" data-action="unit-add-ing" data-ing="${idx}">OK</button></div></label>`;
+    }
+    const cur = txt(i.enhed);
+    const list = [...this._units];
+    if (cur && !list.includes(cur)) list.push(cur);
+    return `<label class="fld"><span>Enhed</span><select data-ing="${idx}" data-k="enhed">
+      <option value="" ${cur ? "" : "selected"}>Ingen</option>
+      ${list.map((u) => `<option value="${esc(u)}" ${u === cur ? "selected" : ""}>${esc(u)}</option>`).join("")}
+      <option value="__ny__">+ Ny enhed…</option></select></label>`;
+  }
+
+  async _addUnitForIngredient(idx) {
+    const input = this.shadowRoot.querySelector(`input[data-unit-ing="${idx}"]`);
+    const unit = txt(input?.value);
+    this._unitPrompt = null;
+    if (unit && this._draft) {
+      const known = this._units.find((u) => u.toLowerCase() === unit.toLowerCase());
+      this._draft.ingredienser[idx].enhed = known || unit;
+      if (!known) {
+        const res = await this._ws({ type: "opskrifter/enheder_gem", enheder: [...this._units, unit] });
+        if (res?.enheder) this._units = res.enheder;
+      }
+    }
+    this._rerender(".ing-list", this._ingEditRows());
+  }
+
   _toggle(idx, k, on, label) {
     return `<button class="toggle ${on ? "on" : ""}" data-action="flag" data-ing="${idx}" data-k="${k}" aria-pressed="${on}">
       <ha-icon icon="${on ? "mdi:checkbox-marked" : "mdi:checkbox-blank-outline"}"></ha-icon>${esc(label)}</button>`;
@@ -784,7 +836,7 @@ class OpskriftCard extends HTMLElement {
         <div class="ing-body">
           <div class="cols3">
             ${this._ifield("Mængde", idx, "maengde", i.maengde, { mode: "decimal", placeholder: "0,5" })}
-            ${this._ifield("Enhed", idx, "enhed", i.enhed, { list: "oc-units", placeholder: "spsk." })}
+            ${this._unitSelect(i, idx)}
             ${this._ifield("Ingrediens", idx, "navn", i.navn, { placeholder: "Fx olie" })}
           </div>
           <div class="cols">
@@ -852,7 +904,7 @@ class OpskriftCard extends HTMLElement {
       <div class="editor" style="${rgb(this._config?.farve)}">
         <div class="e-top">
           <button class="icon-btn" data-action="fam-cancel" aria-label="Annullér"><ha-icon icon="mdi:close"></ha-icon></button>
-          <div class="title">Familie</div>
+          <div class="title">Indstillinger</div>
           <button class="btn primary-btn" data-action="fam-save" ${this._saving ? "disabled" : ""}>Gem</button>
         </div>
         ${this._formError ? `<div class="e-error">${esc(this._formError)}</div>` : ""}
@@ -867,7 +919,24 @@ class OpskriftCard extends HTMLElement {
             </div>`).join("")}</div>
           <button class="btn add-row" data-action="fam-add"><ha-icon icon="mdi:plus"></ha-icon>Tilføj person</button>
         </div>
+        <div class="e-card">
+          <div class="e-h">Enheder</div>
+          <div class="e-hint">Vises i rullemenuen ved ingredienserne og bruges, når Claude aflæser opskrifter. Fjerner du en enhed, beholder eksisterende opskrifter den.</div>
+          <div class="unit-chips">${this._unitDraft.map((u, i) => `<span class="unit-chip">${esc(u)}<button data-action="unit-del" data-unit="${i}" aria-label="Fjern ${esc(u)}"><ha-icon icon="mdi:close"></ha-icon></button></span>`).join("")}</div>
+          <div class="add-tag">
+            <input type="text" data-input="newunit" placeholder="Ny enhed, fx kop" value="${esc(this._newUnit)}" autocomplete="off" aria-label="Ny enhed">
+            <button class="btn" data-action="unit-add"><ha-icon icon="mdi:plus"></ha-icon>Tilføj</button>
+          </div>
+        </div>
       </div>`;
+  }
+
+  _addUnitDraft() {
+    const unit = txt(this._newUnit);
+    if (unit && !this._unitDraft.some((u) => u.toLowerCase() === unit.toLowerCase())) this._unitDraft.push(unit);
+    this._newUnit = "";
+    this._render();
+    this.shadowRoot.querySelector('input[data-input="newunit"]')?.focus();
   }
 
   async _saveFamily() {
@@ -885,7 +954,12 @@ class OpskriftCard extends HTMLElement {
         familie: this._famDraft.filter((p) => txt(p.navn)).map((p) => (p.id ? { id: p.id, navn: txt(p.navn) } : { navn: txt(p.navn) })),
       });
       this._familie = res.familie;
+      if (this._unitDraft) {
+        const u = await this._hass.callWS({ type: "opskrifter/enheder_gem", enheder: this._unitDraft });
+        this._units = u.enheder;
+      }
       this._famDraft = null;
+      this._unitDraft = null;
     } catch (err) {
       this._formError = `Kunne ikke gemme: ${err?.message || err?.code || err}`;
     }
@@ -921,19 +995,22 @@ class OpskriftCard extends HTMLElement {
           <button class="btn primary-btn" data-action="save" ${this._saving || this._uploading || this._aiBusy ? "disabled" : ""}>Gem</button>
         </div>
         <datalist id="oc-cats">${cats.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
-        <datalist id="oc-units">${UNITS.map((u) => `<option value="${esc(u)}">`).join("")}</datalist>
         <datalist id="oc-groups">${groups.map((g) => `<option value="${esc(g)}">`).join("")}</datalist>
         ${this._formError ? `<div class="e-error">${esc(this._formError)}</div>` : ""}
         ${isNew ? `
         <div class="e-card ai">
           <div class="e-h"><ha-icon icon="mdi:text-recognition"></ha-icon>Start fra et billede</div>
-          <div class="e-hint">Tag et billede af en opskrift, så udfylder Claude felterne. Du kan rette alt, før du gemmer.</div>
-          <div class="ai-row">
-            ${this._aiBusy
-              ? `<span class="spinner" aria-hidden="true"></span><span class="busy">Claude læser opskriften. Det tager typisk 10–40 sekunder.</span>`
-              : `<label class="btn primary-btn upload"><ha-icon icon="mdi:camera-outline"></ha-icon>Tag eller vælg billede
-                  <input type="file" accept="image/*" data-upload="ai"></label>`}
-          </div>
+          <div class="e-hint">Tag et billede af opskriften. Fylder den flere sider, så tilføj et billede af hver, før du trykker Læs opskrift. Du kan rette alt, før du gemmer.</div>
+          ${this._aiBusy
+            ? `<div class="ai-row"><span class="spinner" aria-hidden="true"></span><span class="busy">Claude læser opskriften. Det tager typisk 10–40 sekunder.</span></div>`
+            : `${this._aiImgs.length ? `<div class="e-thumbs">${this._aiImgs.map((b, bi) => `
+                <div class="e-thumb"><img src="${esc(imgUrl(b, true))}" alt="Side ${bi + 1}">
+                  <button class="x" data-action="ai-del" data-bi="${bi}" aria-label="Fjern side ${bi + 1}"><ha-icon icon="mdi:close"></ha-icon></button></div>`).join("")}</div>` : ""}
+              <div class="ai-row">
+                <label class="btn ${this._aiImgs.length ? "" : "primary-btn"} upload"><ha-icon icon="mdi:camera-plus-outline"></ha-icon>${this._aiImgs.length ? "Tilføj flere billeder" : "Tag eller vælg billede"}
+                  <input type="file" accept="image/*" multiple data-upload="ai"></label>
+                ${this._aiImgs.length ? `<button class="btn primary-btn" data-action="ai-read"><ha-icon icon="mdi:text-recognition"></ha-icon>Læs opskrift (${this._aiImgs.length} ${this._aiImgs.length === 1 ? "billede" : "billeder"})</button>` : ""}
+              </div>`}
         </div>` : ""}
 
         <div class="e-card">
@@ -1078,16 +1155,9 @@ class OpskriftCard extends HTMLElement {
         const id = await this._upload(f);
         if (!this._draft) break;
         if (target === "ai") {
-          this._uploading -= 1;
-          this._aiBusy = true;
+          if (this._aiImgs.length < 8) this._aiImgs.push(id);
           this._render();
-          try {
-            await this._readFromImage(id);
-          } finally {
-            this._aiBusy = false;
-            this._uploading += 1;
-          }
-          break;
+          continue;
         }
         if (target === "main") this._draft.billede = id;
         else this._draft.trin[idx]?.billeder.push(id);
@@ -1101,8 +1171,23 @@ class OpskriftCard extends HTMLElement {
     if (this._draft) this._render();
   }
 
-  async _readFromImage(imageId) {
-    const res = await this._hass.callWS({ type: "opskrifter/fra_billede", billede_id: imageId });
+  async _aiRead() {
+    if (!this._aiImgs.length || this._aiBusy) return;
+    this._aiBusy = true;
+    this._formError = null;
+    this._render();
+    try {
+      await this._readFromImage([...this._aiImgs]);
+      this._aiImgs = [];
+    } catch (err) {
+      this._formError = `Opskriften kunne ikke aflæses: ${err?.message || err?.code || err}`;
+    }
+    this._aiBusy = false;
+    if (this._draft) this._render();
+  }
+
+  async _readFromImage(imageIds) {
+    const res = await this._hass.callWS({ type: "opskrifter/fra_billede", billede_ids: imageIds });
     const r = normalize([{ ...res.opskrift, id: "ny" }])[0];
     const d = this._draft;
     if (!d) return;
@@ -1203,6 +1288,8 @@ class OpskriftCard extends HTMLElement {
     if (a === "settings") {
       this._famDraft = this._familie.map((p) => ({ ...p }));
       if (!this._famDraft.length) this._famDraft.push({ navn: "" });
+      this._unitDraft = [...this._units];
+      this._newUnit = "";
       this._formError = null;
       return this._render();
     }
@@ -1210,7 +1297,9 @@ class OpskriftCard extends HTMLElement {
       const fi = Number(el.dataset.fam);
       const f = this._famDraft;
       switch (a) {
-        case "fam-cancel": this._famDraft = null; this._formError = null; return this._render();
+        case "fam-cancel": this._famDraft = null; this._unitDraft = null; this._formError = null; return this._render();
+        case "unit-del": this._unitDraft.splice(Number(el.dataset.unit), 1); return this._render();
+        case "unit-add": return this._addUnitDraft();
         case "fam-save": return this._saveFamily();
         case "fam-add":
           f.push({ navn: "" });
@@ -1241,6 +1330,8 @@ class OpskriftCard extends HTMLElement {
     if (a === "import") return this._import();
     if (a === "new" || a === "edit") {
       this._draft = this._newDraft(a === "edit" ? this._current() : null);
+      this._aiImgs = [];
+      this._unitPrompt = null;
       this._openIng = a === "new" ? 0 : null;
       this._formError = null;
       this._confirmDelete = false;
@@ -1263,6 +1354,9 @@ class OpskriftCard extends HTMLElement {
           return this._rerender(".tag-pick", this._tagPick());
         }
         case "tag-add": return this._addTag();
+        case "ai-del": this._aiImgs.splice(Number(el.dataset.bi), 1); return this._render();
+        case "ai-read": return this._aiRead();
+        case "unit-add-ing": return this._addUnitForIngredient(idx);
         case "ing-toggle":
           this._openIng = this._openIng === idx ? null : idx;
           return this._rerender(".ing-list", this._ingEditRows());
@@ -1369,6 +1463,10 @@ class OpskriftCard extends HTMLElement {
       if (list) list.innerHTML = this._rows();
       return;
     }
+    if (this._unitDraft && t.dataset.input === "newunit") {
+      this._newUnit = t.value;
+      return;
+    }
     if (this._famDraft && t.dataset.fam !== undefined && t.tagName === "INPUT") {
       this._famDraft[Number(t.dataset.fam)].navn = t.value;
       return;
@@ -1382,6 +1480,7 @@ class OpskriftCard extends HTMLElement {
       this._draft[t.dataset.f] = t.value;
     } else if (t.dataset.ing !== undefined) {
       const idx = Number(t.dataset.ing);
+      if (t.value === "__ny__") return;
       this._draft.ingredienser[idx][t.dataset.k] = t.value;
       if (["navn", "maengde", "enhed", "gruppe"].includes(t.dataset.k)) this._updateIngHead(idx);
     } else if (t.dataset.trin !== undefined && t.tagName === "TEXTAREA") {
@@ -1393,6 +1492,12 @@ class OpskriftCard extends HTMLElement {
     const t = e.target;
     if (this._draft && t.dataset.upload) {
       this._handleUpload(t);
+      return;
+    }
+    if (this._draft && t.dataset.k === "enhed" && t.value === "__ny__") {
+      this._unitPrompt = Number(t.dataset.ing);
+      this._rerender(".ing-list", this._ingEditRows());
+      this.shadowRoot.querySelector(`input[data-unit-ing="${this._unitPrompt}"]`)?.focus();
       return;
     }
     if (this._draft && t.dataset.f === "farve") {
